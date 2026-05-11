@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
-import { Mail, Loader2, CheckCircle, MapPin } from 'lucide-react'
+import { Mail, Loader2, CheckCircle } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -47,32 +48,26 @@ export default function LoginPage() {
           </span>
         </div>
 
-        {/* Wordmark */}
-        <div className="text-center mb-10">
-          <h2 className="text-3xl font-bold tracking-tight">
-            <span className="text-navy-900">Wolds</span>{' '}
-            <span className="text-brand-500">Digital</span>
-            <span className="text-navy-400 text-lg font-medium align-top ml-0.5">Ltd</span>
-          </h2>
-          <div className="mt-2 flex items-center justify-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-navy-500">
-            <span className="h-px w-8 bg-navy-200" />
-            IT Consultancy &amp; Website Development
-            <span className="h-px w-8 bg-navy-200" />
-          </div>
-          <p className="mt-1.5 flex items-center justify-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-brand-700">
-            <MapPin className="h-3 w-3" />
-            East Riding of Yorkshire
-          </p>
+        {/* Logo */}
+        <div className="mb-8 flex justify-center">
+          <Image
+            src="/wolds-digital-logo.png"
+            alt="Wolds Digital Ltd — IT Consultancy & Website Development"
+            width={1254}
+            height={1254}
+            priority
+            className="h-auto w-56 sm:w-64"
+          />
         </div>
 
         {/* Card */}
         <div className="rounded-3xl border border-navy-100 bg-white p-8 shadow-soft">
           {!sent ? (
             <>
-              <h1 className="text-2xl font-bold tracking-tight text-navy-900">
+              <h1 className="text-center text-2xl font-bold tracking-tight text-navy-900">
                 Welcome back<span className="text-brand-500">.</span>
               </h1>
-              <p className="mt-1.5 text-sm text-navy-600">
+              <p className="mx-auto mt-2 max-w-sm text-center text-sm text-navy-600">
                 Enter your email and we&apos;ll send you a magic link — no password needed.
               </p>
 

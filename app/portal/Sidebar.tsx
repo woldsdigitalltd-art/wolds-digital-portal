@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -45,15 +46,25 @@ export default function Sidebar({ email, name, company }: SidebarProps) {
   return (
     <aside className="w-[var(--sidebar-width)] shrink-0 flex h-full flex-col border-r border-navy-100 bg-white/70 backdrop-blur-sm">
       {/* Brand */}
-      <div className="px-5 py-6 border-b border-navy-100">
-        <Link href="/portal" className="block">
-          <p className="text-xl font-bold tracking-tight leading-none">
-            <span className="text-navy-900">Wolds</span>{' '}
-            <span className="text-brand-500">Digital</span>
-          </p>
-          <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-navy-400">
-            Client Portal
-          </p>
+      <div className="border-b border-navy-100 px-5 py-5">
+        <Link href="/portal" className="flex items-center gap-3">
+          <Image
+            src="/wolds-digital-logo.png"
+            alt="Wolds Digital"
+            width={1254}
+            height={1254}
+            priority
+            className="h-10 w-10 shrink-0 rounded-lg"
+          />
+          <div className="min-w-0">
+            <p className="text-sm font-bold tracking-tight leading-tight">
+              <span className="text-navy-900">Wolds</span>{' '}
+              <span className="text-brand-500">Digital</span>
+            </p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-navy-400 leading-tight mt-0.5">
+              Client Portal
+            </p>
+          </div>
         </Link>
       </div>
 
