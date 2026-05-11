@@ -1,13 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
-import { BarChart3, Activity, Megaphone, CreditCard, ArrowRight } from 'lucide-react'
+import { BarChart3, Activity, Megaphone, CreditCard, ArrowRight, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 
 export default async function PortalPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const { data: portalData } = await supabase
-    .rpc('get_my_portal_data')
+  const { data: portalData } = await supabase.rpc('get_my_portal_data')
 
   const profile   = portalData?.profile
   const sites     = portalData?.sites ?? []
@@ -27,70 +26,66 @@ export default async function PortalPage() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-slate-900">
+      <div className="mb-10">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700 mb-2">
+          Dashboard
+        </p>
+        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-navy-900">
           {greeting()}{displayName ? `, ${displayName}` : ''}
+          <span className="text-brand-500">.</span>
         </h1>
-        <p className="text-slate-500 text-sm mt-1">
+        <p className="mt-2 text-sm md:text-base text-navy-600">
           Here&apos;s an overview of your web presence.
         </p>
       </div>
 
-      {/* Site info banner */}
+      {/* Site info card */}
       {firstSite && (
-        <div className="bg-white border border-slate-200 rounded-xl px-5 py-4 mb-6 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-400 font-medium uppercase tracking-wide mb-0.5">Your website</p>
-            <p className="text-slate-900 font-medium">{firstSite.display_name}</p>
-            <a
-              href={`https://${firstSite.domain}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-brand-600 hover:text-brand-700 transition"
-            >
-              {firstSite.domain} ↗
-            </a>
-          </div>
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${
-            uptime?.status === 'up'
-              ? 'bg-green-50 text-green-700'
-              : uptime?.status === 'down'
-              ? 'bg-red-50 text-red-700'
-              : 'bg-slate-100 text-slate-500'
-          }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${
-              uptime?.status === 'up' ? 'bg-green-500' :
-              uptime?.status === 'down' ? 'bg-red-500' : 'bg-slate-400'
-            }`} />
-            {uptime?.status === 'up' ? 'Online' : uptime?.status === 'down' ? 'Offline' : 'Status unknown'}
+        <div className="mb-8 rounded-2xl border border-navy-100 bg-white p-6 shadow-soft">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-navy-400 mb-1">
+                Your website
+              </p>
+              <p className="text-lg font-bold text-navy-900 truncate">
+                {firstSite.display_name}
+              </p>
+              <a
+                href={`https://${firstSite.domain}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:text-brand-800 transition"
+              >
+                {firstSite.domain}
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </div>
+            <StatusPill status={uptime?.status} />
           </div>
         </div>
       )}
 
       {/* Quick links */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <QuickLink
           href="/portal/analytics"
           icon={BarChart3}
           title="Analytics"
           description="Visitors, traffic sources and page views"
-          color="blue"
         />
         <QuickLink
           href="/portal/social"
           icon={Megaphone}
           title="What's on"
           description="Schedule and manage your social posts"
-          color="amber"
         />
         <QuickLink
           href="/portal/uptime"
           icon={Activity}
           title="Uptime"
           description={uptime?.uptime_percentage
-            ? `${uptime.uptime_percentage}% uptime this month`
+            ? `${Number(uptime.uptime_percentage).toFixed(2)}% uptime this month`
             : 'Monitor your site availability'}
-          color="green"
         />
         <QuickLink
           href="/portal/subscription"
@@ -99,19 +94,21 @@ export default async function PortalPage() {
           description={sub?.plan
             ? `${sub.plan.charAt(0).toUpperCase() + sub.plan.slice(1)} plan — ${sub.status}`
             : 'Manage your plan and billing'}
-          color="purple"
         />
       </div>
 
       {/* No site yet */}
       {!firstSite && (
-        <div className="bg-white border border-dashed border-slate-300 rounded-xl p-8 text-center">
-          <p className="text-slate-500 text-sm">
+        <div className="mt-8 rounded-2xl border border-dashed border-navy-200 bg-white/60 p-8 text-center">
+          <p className="text-sm text-navy-600">
             Your site details haven&apos;t been set up yet.{' '}
-            <a href="mailto:hello@woldsdigital.com" className="text-brand-600 hover:underline">
+            <a
+              href="mailto:hello@woldsdigital.co.uk"
+              className="font-semibold text-brand-700 hover:text-brand-800 underline-offset-2 hover:underline"
+            >
               Get in touch
             </a>{' '}
-            with us and we&apos;ll get you set up.
+            and we&apos;ll get you set up.
           </p>
         </div>
       )}
@@ -119,35 +116,45 @@ export default async function PortalPage() {
   )
 }
 
+function StatusPill({ status }: { status?: string }) {
+  const cfg =
+    status === 'up'
+      ? { label: 'Online', dot: 'bg-brand-500', text: 'text-brand-700', border: 'border-brand-100', bg: 'bg-brand-50' }
+      : status === 'down'
+      ? { label: 'Offline', dot: 'bg-red-500', text: 'text-red-700', border: 'border-red-100', bg: 'bg-red-50' }
+      : { label: 'Status unknown', dot: 'bg-navy-300', text: 'text-navy-600', border: 'border-navy-100', bg: 'bg-white' }
+
+  return (
+    <span
+      className={`inline-flex w-fit items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-semibold ${cfg.bg} ${cfg.border} ${cfg.text}`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${cfg.dot}`} />
+      {cfg.label}
+    </span>
+  )
+}
+
 function QuickLink({
-  href, icon: Icon, title, description, color,
+  href, icon: Icon, title, description,
 }: {
   href: string
   icon: React.ElementType
   title: string
   description: string
-  color: 'blue' | 'amber' | 'green' | 'purple'
 }) {
-  const colours = {
-    blue:   'bg-blue-50 text-blue-600',
-    amber:  'bg-amber-50 text-amber-600',
-    green:  'bg-green-50 text-green-600',
-    purple: 'bg-purple-50 text-purple-600',
-  }
-
   return (
     <Link
       href={href}
-      className="group bg-white border border-slate-200 rounded-xl p-5 hover:border-slate-300 hover:shadow-sm transition-all flex items-start gap-4"
+      className="group flex items-start gap-4 rounded-2xl border border-navy-100 bg-white p-5 shadow-soft transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md"
     >
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${colours[color]}`}>
-        <Icon className="w-4 h-4" />
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700 ring-1 ring-brand-100 transition group-hover:bg-brand-100">
+        <Icon className="h-5 w-5" />
       </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-slate-900 font-medium text-sm">{title}</p>
-        <p className="text-slate-500 text-xs mt-0.5 leading-relaxed">{description}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-navy-900">{title}</p>
+        <p className="mt-1 text-xs leading-relaxed text-navy-500">{description}</p>
       </div>
-      <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-slate-400 shrink-0 mt-0.5 transition" />
+      <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-navy-300 transition group-hover:translate-x-0.5 group-hover:text-brand-600" />
     </Link>
   )
 }

@@ -9,32 +9,37 @@ export default async function AnalyticsPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-slate-900">Analytics</h1>
-        <p className="text-slate-500 text-sm mt-1">
-          Traffic and visitor data for {site?.domain ?? 'your website'}.
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700 mb-2">
+          Analytics
+        </p>
+        <h1 className="text-3xl font-bold tracking-tight text-navy-900">
+          Traffic insights<span className="text-brand-500">.</span>
+        </h1>
+        <p className="mt-2 text-sm text-navy-600">
+          Visitors and traffic data for {site?.domain ?? 'your website'}.
         </p>
       </div>
 
       {site?.ga_property_id ? (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-soft">
+          <div className="flex items-center justify-between border-b border-navy-100 px-6 py-4">
             <div className="flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-slate-400" />
-              <span className="text-sm font-medium text-slate-700">Google Analytics</span>
+              <BarChart3 className="h-4 w-4 text-brand-600" />
+              <span className="text-sm font-semibold text-navy-900">Google Analytics</span>
             </div>
             <a
               href={`https://analytics.google.com/analytics/web/#/p${site.ga_property_id}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-navy-500 transition hover:text-brand-700"
             >
-              Open in GA4 <ExternalLink className="w-3 h-3" />
+              Open in GA4 <ExternalLink className="h-3 w-3" />
             </a>
           </div>
-          <div className="p-6">
-            <p className="text-slate-500 text-sm text-center py-8">
+          <div className="p-8 text-center">
+            <p className="text-sm text-navy-600">
               Analytics embed coming soon. Your property ID is{' '}
-              <code className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded text-xs font-mono">
+              <code className="rounded bg-navy-50 px-1.5 py-0.5 font-mono text-xs text-navy-800">
                 {site.ga_property_id}
               </code>
               .
@@ -42,28 +47,40 @@ export default async function AnalyticsPage() {
           </div>
         </div>
       ) : site?.plausible_domain ? (
-        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100">
-            <span className="text-sm font-medium text-slate-700">Plausible Analytics</span>
+        <div className="overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-soft">
+          <div className="border-b border-navy-100 px-6 py-4">
+            <span className="text-sm font-semibold text-navy-900">Plausible Analytics</span>
           </div>
           <iframe
             src={`https://plausible.io/${site.plausible_domain}/embed`}
-            className="w-full h-[600px] border-0"
+            className="h-[600px] w-full border-0"
             title="Site analytics"
           />
         </div>
       ) : (
-        <div className="bg-white border border-dashed border-slate-300 rounded-xl p-10 text-center">
-          <BarChart3 className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500 text-sm">
-            Analytics haven&apos;t been configured yet.{' '}
-            <a href="mailto:hello@woldsdigital.com" className="text-brand-600 hover:underline">
-              Contact us
-            </a>{' '}
-            to get this set up.
-          </p>
-        </div>
+        <EmptyState
+          icon={BarChart3}
+          message="Analytics haven't been configured yet."
+        />
       )}
+    </div>
+  )
+}
+
+function EmptyState({ icon: Icon, message }: { icon: React.ElementType; message: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-navy-200 bg-white/60 p-10 text-center">
+      <Icon className="mx-auto mb-3 h-8 w-8 text-navy-300" />
+      <p className="text-sm text-navy-600">
+        {message}{' '}
+        <a
+          href="mailto:hello@woldsdigital.co.uk"
+          className="font-semibold text-brand-700 underline-offset-2 hover:underline"
+        >
+          Contact us
+        </a>{' '}
+        to get this set up.
+      </p>
     </div>
   )
 }

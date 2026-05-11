@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { User, Loader2, CheckCircle } from 'lucide-react'
+import { Loader2, CheckCircle } from 'lucide-react'
 
 export default function AccountPage() {
   const supabase = createClient()
@@ -60,10 +60,13 @@ export default function AccountPage() {
     setSaving(false)
   }
 
+  const initials =
+    (company || fullName || email).trim().split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase() || 'W'
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-5 h-5 text-slate-400 animate-spin" />
+        <Loader2 className="h-5 w-5 animate-spin text-navy-400" />
       </div>
     )
   }
@@ -71,25 +74,34 @@ export default function AccountPage() {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-slate-900">Account</h1>
-        <p className="text-slate-500 text-sm mt-1">Update your contact and business details.</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700 mb-2">
+          Account
+        </p>
+        <h1 className="text-3xl font-bold tracking-tight text-navy-900">
+          Your details<span className="text-brand-500">.</span>
+        </h1>
+        <p className="mt-2 text-sm text-navy-600">
+          Update your contact and business information.
+        </p>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl divide-y divide-slate-100">
+      <div className="overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-soft">
         {/* Header */}
-        <div className="px-6 py-5 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center">
-            <User className="w-5 h-5 text-brand-600" />
+        <div className="flex items-center gap-4 border-b border-navy-100 px-6 py-5">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-700">
+            {initials}
           </div>
-          <div>
-            <p className="text-sm font-medium text-slate-900">{fullName || 'Your account'}</p>
-            <p className="text-xs text-slate-500">{email}</p>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-navy-900">
+              {fullName || company || 'Your account'}
+            </p>
+            <p className="truncate text-xs text-navy-500">{email}</p>
           </div>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSave} className="px-6 py-6 space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <form onSubmit={handleSave} className="space-y-6 px-6 py-7">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <Field
               label="Full name"
               value={fullName}
@@ -110,37 +122,39 @@ export default function AccountPage() {
               type="tel"
             />
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-navy-700">
                 Email address
               </label>
               <input
                 type="email"
                 value={email}
                 disabled
-                className="w-full bg-slate-50 border border-slate-200 text-slate-400 rounded-lg px-3.5 py-2.5 text-sm cursor-not-allowed"
+                className="w-full cursor-not-allowed rounded-full border border-navy-100 bg-navy-50/60 px-4 py-2.5 text-sm text-navy-400"
               />
-              <p className="text-xs text-slate-400 mt-1">Email is managed via your login link.</p>
+              <p className="mt-1.5 text-xs text-navy-400">
+                Email is managed via your login link.
+              </p>
             </div>
           </div>
 
           {error && (
-            <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <p className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm text-red-700">
               {error}
             </p>
           )}
 
-          <div className="flex items-center gap-3 pt-1">
+          <div className="flex items-center gap-4 pt-1">
             <button
               type="submit"
               disabled={saving}
-              className="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition flex items-center gap-2"
+              className="inline-flex items-center gap-2 rounded-full bg-navy-900 px-6 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-navy-800 active:bg-navy-950 disabled:opacity-50"
             >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
               Save changes
             </button>
             {saved && (
-              <span className="flex items-center gap-1.5 text-green-600 text-sm">
-                <CheckCircle className="w-4 h-4" /> Saved
+              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-700">
+                <CheckCircle className="h-4 w-4" /> Saved
               </span>
             )}
           </div>
@@ -161,13 +175,15 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1.5">{label}</label>
+      <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-navy-700">
+        {label}
+      </label>
       <input
         type={type}
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full bg-white border border-slate-200 text-slate-900 placeholder-slate-400 rounded-lg px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition"
+        className="w-full rounded-full border border-navy-200 bg-white px-4 py-2.5 text-sm text-navy-900 placeholder:text-navy-400 transition focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
       />
     </div>
   )

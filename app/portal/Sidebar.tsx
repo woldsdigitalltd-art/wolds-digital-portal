@@ -11,16 +11,15 @@ import {
   User,
   CreditCard,
   LogOut,
-  Globe,
 } from 'lucide-react'
 
 const navItems = [
-  { href: '/portal',              label: 'Dashboard',   icon: LayoutDashboard, exact: true },
-  { href: '/portal/analytics',    label: 'Analytics',   icon: BarChart3 },
-  { href: '/portal/social',       label: "What's on",   icon: Megaphone },
-  { href: '/portal/uptime',       label: 'Uptime',      icon: Activity },
-  { href: '/portal/account',      label: 'Account',     icon: User },
-  { href: '/portal/subscription', label: 'Subscription',icon: CreditCard },
+  { href: '/portal',              label: 'Dashboard',    icon: LayoutDashboard, exact: true },
+  { href: '/portal/analytics',    label: 'Analytics',    icon: BarChart3 },
+  { href: '/portal/social',       label: "What's on",    icon: Megaphone },
+  { href: '/portal/uptime',       label: 'Uptime',       icon: Activity },
+  { href: '/portal/account',      label: 'Account',      icon: User },
+  { href: '/portal/subscription', label: 'Subscription', icon: CreditCard },
 ]
 
 interface SidebarProps {
@@ -40,36 +39,43 @@ export default function Sidebar({ email, name, company }: SidebarProps) {
     router.refresh()
   }
 
+  const initials =
+    (company ?? name ?? email).trim().split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase() || 'W'
+
   return (
-    <aside className="w-64 shrink-0 bg-slate-900 flex flex-col h-full border-r border-slate-800">
-      {/* Logo */}
-      <div className="px-5 py-6 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center shrink-0">
-            <Globe className="w-4 h-4 text-white" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-white font-semibold text-sm leading-tight truncate">Wolds Digital</p>
-            <p className="text-slate-500 text-xs leading-tight">Client Portal</p>
-          </div>
-        </div>
+    <aside className="w-[var(--sidebar-width)] shrink-0 flex h-full flex-col border-r border-navy-100 bg-white/70 backdrop-blur-sm">
+      {/* Brand */}
+      <div className="px-5 py-6 border-b border-navy-100">
+        <Link href="/portal" className="block">
+          <p className="text-xl font-bold tracking-tight leading-none">
+            <span className="text-navy-900">Wolds</span>{' '}
+            <span className="text-brand-500">Digital</span>
+          </p>
+          <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-navy-400">
+            Client Portal
+          </p>
+        </Link>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto scrollbar-hide">
+      <nav className="flex-1 overflow-y-auto px-3 py-5 space-y-1 scrollbar-hide">
         {navItems.map(({ href, label, icon: Icon, exact }) => {
           const active = exact ? pathname === href : pathname.startsWith(href)
           return (
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+              className={`group relative flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium transition ${
                 active
-                  ? 'bg-brand-500/15 text-brand-400 font-medium'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                  ? 'bg-navy-900 text-white shadow-soft'
+                  : 'text-navy-600 hover:bg-navy-50 hover:text-navy-900'
               }`}
             >
-              <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-brand-400' : ''}`} />
+              <Icon
+                className={`h-4 w-4 shrink-0 ${
+                  active ? 'text-brand-300' : 'text-navy-400 group-hover:text-navy-600'
+                }`}
+              />
               {label}
             </Link>
           )
@@ -77,18 +83,23 @@ export default function Sidebar({ email, name, company }: SidebarProps) {
       </nav>
 
       {/* User footer */}
-      <div className="px-3 py-4 border-t border-slate-800">
-        <div className="px-3 py-2 mb-1">
-          <p className="text-slate-200 text-sm font-medium truncate leading-tight">
-            {company ?? name ?? 'My Account'}
-          </p>
-          <p className="text-slate-500 text-xs truncate mt-0.5">{email}</p>
+      <div className="px-3 py-4 border-t border-navy-100">
+        <div className="flex items-center gap-3 px-2 py-2 mb-2">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-700 text-xs font-bold">
+            {initials}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-navy-900 leading-tight">
+              {company ?? name ?? 'My Account'}
+            </p>
+            <p className="truncate text-xs text-navy-500 leading-tight mt-0.5">{email}</p>
+          </div>
         </div>
         <button
           onClick={signOut}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+          className="flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium text-navy-600 transition hover:bg-navy-50 hover:text-navy-900"
         >
-          <LogOut className="w-4 h-4 shrink-0" />
+          <LogOut className="h-4 w-4 text-navy-400" />
           Sign out
         </button>
       </div>
