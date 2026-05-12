@@ -12,6 +12,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  RefreshCw,
   Save,
   Trash2,
   X,
@@ -163,23 +164,40 @@ export default function ManageSitesButton({
     return (linksBySite[siteId] ?? []).find(l => l.service_id === serviceId)
   }
 
-  /** Mark a link as cancelled (soft-off). */
-  async function softCancel(site: Site, link: SiteServiceListItem) {
+  /**
+   * Remove a live service. Calls the provisioning orchestrator so the
+   * external resource (e.g. Better Stack monitor) is torn down first;
+   * the orchestrator then sets `status='cancelled'` on the row. If the
+   * provider call fails, the row ends up as `status='error'` with a
+   * `last_error` message, so we refetch the row to surface it.
+   */
+  async function removeService(site: Site, link: SiteServiceListItem) {
     const key = `${site.id}:${link.service_id}`
     setPending(prev => new Set(prev).add(key))
     setError(null)
     try {
-      const res = await fetch(`/api/admin/sites/${site.id}/services/${link.id}`, {
-        method:  'PATCH',
+      const res = await fetch('/api/admin/provision-service', {
+        method:  'POST',
         headers: { 'content-type': 'application/json' },
-        body:    JSON.stringify({ status: 'cancelled' }),
+        body:    JSON.stringify({ action: 'deprovision', site_service_id: link.id }),
       })
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string }
-      if (!res.ok || !data.ok) throw new Error(data.error ?? 'Could not remove service.')
+      const data = (await res.json().catch(() => ({}))) as { status?: string; error?: string }
+      if (!res.ok) {
+        const fresh = await fetchLink(site.id, link.id)
+        if (fresh) {
+          setLinksBySite(prev => ({
+            ...prev,
+            [site.id]: (prev[site.id] ?? []).map(l => (l.id === link.id ? fresh : l)),
+          }))
+        }
+        throw new Error(data.error ?? 'Could not remove service.')
+      }
       setLinksBySite(prev => ({
         ...prev,
         [site.id]: (prev[site.id] ?? []).map(l =>
-          l.id === link.id ? { ...l, status: 'cancelled' } : l
+          l.id === link.id
+            ? { ...l, status: 'cancelled', last_error: null, provider_resource_id: null }
+            : l,
         ),
       }))
       router.refresh()
@@ -190,6 +208,48 @@ export default function ManageSitesButton({
         const c = new Set(prev); c.delete(key); return c
       })
     }
+  }
+
+  /**
+   * Re-run provisioning for a link that's in error/pending state
+   * (e.g. provider was down, credentials were wrong, etc.).
+   */
+  async function retryProvision(site: Site, link: SiteServiceListItem) {
+    const key = `${site.id}:${link.service_id}`
+    setPending(prev => new Set(prev).add(key))
+    setError(null)
+    try {
+      const res = await fetch('/api/admin/provision-service', {
+        method:  'POST',
+        headers: { 'content-type': 'application/json' },
+        body:    JSON.stringify({ action: 'provision', site_service_id: link.id }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      const fresh = await fetchLink(site.id, link.id)
+      if (fresh) {
+        setLinksBySite(prev => ({
+          ...prev,
+          [site.id]: (prev[site.id] ?? []).map(l => (l.id === link.id ? fresh : l)),
+        }))
+      }
+      if (!res.ok) throw new Error(data.error ?? 'Provisioning failed.')
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed.')
+    } finally {
+      setPending(prev => {
+        const c = new Set(prev); c.delete(key); return c
+      })
+    }
+  }
+
+  async function fetchLink(siteId: string, linkId: string): Promise<SiteServiceListItem | null> {
+    // The list endpoint already returns the joined view we display, so
+    // re-fetching the whole list for one site is the simplest way to
+    // pull a single row's latest state.
+    const r = await fetch(`/api/admin/sites/${siteId}/services`)
+    const d = await r.json().catch(() => ({})) as { links?: SiteServiceListItem[] }
+    return (d.links ?? []).find(l => l.id === linkId) ?? null
   }
 
   function handleAssignmentSaved(siteId: string, updated: SiteServiceListItem) {
@@ -310,7 +370,8 @@ export default function ManageSitesButton({
                         onAttachOrEdit={(service, existing) =>
                           setAssignment({ site, service, existing })
                         }
-                        onSoftCancel={softCancel}
+                        onRemove={removeService}
+                        onRetry={retryProvision}
                       />
                     ))}
                   </ul>
@@ -421,14 +482,16 @@ function SiteRow({
   links,
   pending,
   onAttachOrEdit,
-  onSoftCancel,
+  onRemove,
+  onRetry,
 }: {
   site:           Site
   services:       ServiceWithAuth[]
   links:          SiteServiceListItem[]
   pending:        Set<string>
   onAttachOrEdit: (service: ServiceWithAuth, existing: SiteServiceListItem | null) => void
-  onSoftCancel:   (site: Site, link: SiteServiceListItem) => Promise<void>
+  onRemove:       (site: Site, link: SiteServiceListItem) => Promise<void>
+  onRetry:        (site: Site, link: SiteServiceListItem) => Promise<void>
 }) {
   return (
     <li className="rounded-xl border border-navy-100 bg-white p-3">
@@ -508,6 +571,20 @@ function SiteRow({
                 <div className="flex shrink-0 items-center gap-1.5">
                   {isLive ? (
                     <>
+                      {link && (link.status === 'error' || link.status === 'pending') && (
+                        <button
+                          type="button"
+                          disabled={isPending}
+                          onClick={() => onRetry(site, link)}
+                          title="Re-run provisioning"
+                          className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+                        >
+                          {isPending
+                            ? <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                            : <RefreshCw className="h-2.5 w-2.5" />}
+                          Retry
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => onAttachOrEdit(svc, link)}
@@ -519,7 +596,7 @@ function SiteRow({
                       <button
                         type="button"
                         disabled={isPending}
-                        onClick={() => onSoftCancel(site, link)}
+                        onClick={() => onRemove(site, link)}
                         className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
                       >
                         {isPending
@@ -684,6 +761,8 @@ function ServiceAssignmentModal({
           last_error:  null,
         })
       } else {
+        // 1. Insert the site_services row (status defaults to
+        //    `pending` for provisioning services, `active` otherwise).
         res = await fetch(`/api/admin/sites/${site.id}/services`, {
           method:  'POST',
           headers: { 'content-type': 'application/json' },
@@ -696,8 +775,39 @@ function ServiceAssignmentModal({
         body = (await res.json().catch(() => ({}))) as typeof body
         if (!res.ok || !body.id) throw new Error(body.error ?? 'Could not attach service.')
 
-        onSaved({
-          id:                   body.id,
+        const newLinkId = body.id
+
+        // 2. Trigger provisioning. For non-provisioning services this
+        //    just stamps `status='active' + provisioned_at`; for the
+        //    others (uptime, ssl, ...) this hits the external API.
+        //    Either way we read the live row back to grab the final
+        //    status / provider_resource_id / last_error.
+        let provErr: string | null = null
+        try {
+          const provRes = await fetch('/api/admin/provision-service', {
+            method:  'POST',
+            headers: { 'content-type': 'application/json' },
+            body:    JSON.stringify({
+              action:          'provision',
+              site_service_id: newLinkId,
+            }),
+          })
+          if (!provRes.ok) {
+            const provBody = (await provRes.json().catch(() => ({}))) as { error?: string }
+            provErr = provBody.error ?? 'Provisioning failed.'
+          }
+        } catch {
+          provErr = 'Provisioning request failed.'
+        }
+
+        // 3. Re-read the link so we surface the final server-side
+        //    state (provider_resource_id, last_error, etc.).
+        const r = await fetch(`/api/admin/sites/${site.id}/services`)
+        const d = await r.json().catch(() => ({})) as { links?: SiteServiceListItem[] }
+        const fresh = (d.links ?? []).find(l => l.id === newLinkId)
+
+        onSaved(fresh ?? {
+          id:                   newLinkId,
           site_id:              site.id,
           service_id:           service.id,
           service_key:          service.key,
@@ -707,13 +817,15 @@ function ServiceAssignmentModal({
           auth_type:            selectedOption!.auth_type,
           auth_type_label:      selectedOption!.label,
           credentials:          cleaned,
-          status:               body.status ?? (service.provisioning_required ? 'pending' : 'active'),
+          status:               provErr ? 'error' : 'active',
           provider_resource_id: null,
-          last_error:           null,
+          last_error:           provErr,
           provisioned_at:       null,
           created_at:           new Date().toISOString(),
           updated_at:           new Date().toISOString(),
         })
+        // Modal closes (via onSaved → setAssignment(null)) either way.
+        // Errors remain visible on the row as a red status badge + last_error.
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed.')
