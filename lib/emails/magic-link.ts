@@ -20,20 +20,63 @@ export interface MagicLinkEmail {
   text: string
 }
 
+export type MagicLinkVariant = 'sign-in' | 'invite'
+
+interface VariantCopy {
+  subject:    string
+  preheader:  string
+  eyebrow:    string
+  heading:    string
+  headingDot: string
+  introHtml:  string
+  introText:  string
+  ctaLabel:   string
+  securityNote: (recipientEmail: string) => string
+}
+
+const VARIANTS: Record<MagicLinkVariant, VariantCopy> = {
+  'sign-in': {
+    subject:    'Your sign-in link for the Wolds Digital client portal',
+    preheader:  'Sign in to your Wolds Digital client portal. Link expires in 1 hour.',
+    eyebrow:    'Client Portal',
+    heading:    'Welcome back',
+    headingDot: '.',
+    introHtml:  `Click the button below to sign in to your ${SITE_NAME} client portal. This link will expire in <strong>1 hour</strong> and can only be used once.`,
+    introText:  `Click the link below to sign in to your ${SITE_NAME} client portal.\nThis link will expire in 1 hour and can only be used once.`,
+    ctaLabel:   'Sign in to your portal',
+    securityNote: (email) =>
+      `This message was sent to <strong style="color:${NAVY_700};">${escapeHtml(email)}</strong>. If you didn't request this email, you can safely ignore it — nobody can sign in without this link.`,
+  },
+  'invite': {
+    subject:    `You're invited to the ${SITE_NAME} client portal`,
+    preheader:  `Activate your ${SITE_NAME} client portal account.`,
+    eyebrow:    `You've been invited`,
+    heading:    'Welcome aboard',
+    headingDot: '.',
+    introHtml:  `Your ${SITE_NAME} account is ready. Click the button below to activate it and access your client portal — analytics, uptime, billing and more, all in one place.`,
+    introText:  `Your ${SITE_NAME} account is ready. Click the link below to activate it and access your client portal.\nThis link will expire in 1 hour.`,
+    ctaLabel:   'Activate your account',
+    securityNote: (email) =>
+      `This invitation was sent to <strong style="color:${NAVY_700};">${escapeHtml(email)}</strong>. If you weren't expecting it, you can safely ignore this email.`,
+  },
+}
+
 export function renderMagicLinkEmail({
   magicLink,
   recipientEmail,
+  variant = 'sign-in',
 }: {
   magicLink: string
   recipientEmail: string
+  variant?: MagicLinkVariant
 }): MagicLinkEmail {
-  const subject = 'Your sign-in link for the Wolds Digital client portal'
+  const copy = VARIANTS[variant]
+  const subject = copy.subject
 
   const text = [
     `Hi there,`,
     ``,
-    `Click the link below to sign in to your ${SITE_NAME} client portal.`,
-    `This link will expire in 1 hour and can only be used once.`,
+    copy.introText,
     ``,
     magicLink,
     ``,
@@ -61,7 +104,7 @@ export function renderMagicLinkEmail({
   <body style="margin:0; padding:0; background-color:#f7faf3; color:${NAVY}; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
     <!-- Preheader (hidden in body, shown in inbox preview) -->
     <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#f7faf3;">
-      Sign in to your Wolds Digital client portal. Link expires in 1 hour.
+      ${escapeHtml(copy.preheader)}
     </div>
 
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f7faf3;">
@@ -85,7 +128,7 @@ export function renderMagicLinkEmail({
             <tr>
               <td align="center" style="padding:0 32px 8px 32px;">
                 <span style="display:inline-block; font-size:11px; font-weight:700; letter-spacing:0.18em; text-transform:uppercase; color:${BRAND_700};">
-                  Client Portal
+                  ${escapeHtml(copy.eyebrow)}
                 </span>
               </td>
             </tr>
@@ -94,7 +137,7 @@ export function renderMagicLinkEmail({
             <tr>
               <td align="center" style="padding:0 32px 12px 32px;">
                 <h1 style="margin:0; font-size:28px; font-weight:700; line-height:1.2; color:${NAVY}; letter-spacing:-0.01em;">
-                  Welcome back<span style="color:${BRAND_500};">.</span>
+                  ${escapeHtml(copy.heading)}<span style="color:${BRAND_500};">${escapeHtml(copy.headingDot)}</span>
                 </h1>
               </td>
             </tr>
@@ -103,8 +146,7 @@ export function renderMagicLinkEmail({
             <tr>
               <td align="center" style="padding:0 40px 28px 40px;">
                 <p style="margin:0; font-size:15px; line-height:1.6; color:${NAVY_700};">
-                  Click the button below to sign in to your ${SITE_NAME} client portal.
-                  This link will expire in <strong>1 hour</strong> and can only be used once.
+                  ${copy.introHtml}
                 </p>
               </td>
             </tr>
@@ -115,7 +157,7 @@ export function renderMagicLinkEmail({
                 <!--[if mso]>
                 <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${magicLink}" style="height:52px;v-text-anchor:middle;width:280px;" arcsize="50%" stroke="f" fillcolor="${NAVY}">
                   <w:anchorlock/>
-                  <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;">Sign in to your portal</center>
+                  <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;">${escapeHtml(copy.ctaLabel)}</center>
                 </v:roundrect>
                 <![endif]-->
                 <!--[if !mso]><!-- -->
@@ -123,7 +165,7 @@ export function renderMagicLinkEmail({
                   href="${magicLink}"
                   style="background-color:${NAVY}; border-radius:9999px; color:#ffffff; display:inline-block; font-size:15px; font-weight:600; line-height:1; padding:18px 36px; text-decoration:none; text-align:center; mso-padding-alt:0; min-width:200px;"
                 >
-                  Sign in to your portal
+                  ${escapeHtml(copy.ctaLabel)}
                 </a>
                 <!--<![endif]-->
               </td>
@@ -140,8 +182,7 @@ export function renderMagicLinkEmail({
             <tr>
               <td style="padding:24px 40px 8px 40px;">
                 <p style="margin:0; font-size:12px; line-height:1.6; color:${NAVY_500};">
-                  This message was sent to <strong style="color:${NAVY_700};">${escapeHtml(recipientEmail)}</strong>.
-                  If you didn't request this email, you can safely ignore it — nobody can sign in without this link.
+                  ${copy.securityNote(recipientEmail)}
                 </p>
               </td>
             </tr>

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Users, Globe, CreditCard, Clock } from 'lucide-react'
+import NewCustomerButton from './NewCustomerButton'
 
 interface AdminCustomer {
   id:                     string
@@ -38,17 +39,19 @@ export default async function AdminCustomersPage() {
     <div>
       <PageHeader />
 
-      <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-navy-100 bg-white px-3.5 py-1.5 text-xs font-semibold text-navy-700 shadow-soft">
-        <Users className="h-3.5 w-3.5 text-brand-600" />
-        {customers.length.toLocaleString('en-GB')} customer{customers.length === 1 ? '' : 's'}
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <div className="inline-flex items-center gap-2 rounded-full border border-navy-100 bg-white px-3.5 py-1.5 text-xs font-semibold text-navy-700 shadow-soft">
+          <Users className="h-3.5 w-3.5 text-brand-600" />
+          {customers.length.toLocaleString('en-GB')} customer{customers.length === 1 ? '' : 's'}
+        </div>
+        <NewCustomerButton />
       </div>
 
       {customers.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-navy-200 bg-white/60 p-10 text-center">
           <Users className="mx-auto mb-3 h-8 w-8 text-navy-300" />
           <p className="text-sm text-navy-600">
-            No customers yet. Once you invite users from the Supabase dashboard
-            they&apos;ll appear here.
+            No customers yet. Click <strong>Add customer</strong> to invite your first one.
           </p>
         </div>
       ) : (
