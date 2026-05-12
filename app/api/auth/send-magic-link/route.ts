@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { type SupabaseClient } from '@supabase/supabase-js'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendTransactionalEmail } from '@/lib/brevo'
 import { renderMagicLinkEmail } from '@/lib/emails/magic-link'
@@ -52,24 +53,11 @@ export async function POST(request: Request) {
 
   // 1. Confirm the email is actually registered before generating anything.
   //    Without this, generateLink({ type: 'magiclink' }) would silently
-  //    create a new account.
+  //    create a new account. The `auth` schema isn't exposed through
+  //    PostgREST, so we have to use the GoTrue admin API instead.
   try {
-    const { data: existingUser, error: lookupError } = await admin
-      .schema('auth')
-      .from('users')
-      .select('id')
-      .ilike('email', email)
-      .maybeSingle()
-
-    if (lookupError) {
-      console.error('User lookup failed:', lookupError)
-      return NextResponse.json(
-        { error: 'Unable to verify your account right now. Please try again.' },
-        { status: 500 }
-      )
-    }
-
-    if (!existingUser) {
+    const exists = await userExistsByEmail(admin, email)
+    if (!exists) {
       return NextResponse.json(
         {
           error:
@@ -79,7 +67,7 @@ export async function POST(request: Request) {
       )
     }
   } catch (err) {
-    console.error('User lookup threw:', err)
+    console.error('User lookup failed:', err)
     return NextResponse.json(
       { error: 'Unable to verify your account right now. Please try again.' },
       { status: 500 }
@@ -137,4 +125,32 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true })
+}
+
+/**
+ * Checks if a user with the given email exists in Supabase Auth.
+ * Uses the GoTrue admin API (`/auth/v1/admin/users`) via paginated
+ * listUsers, which is the only documented way to look up a user by
+ * email — supabase-js doesn't expose a `getUserByEmail` method.
+ *
+ * For small client portals this is one API call. Scales to ~1k users
+ * per page; we paginate beyond that just in case.
+ */
+async function userExistsByEmail(admin: SupabaseClient, email: string): Promise<boolean> {
+  const target = email.toLowerCase()
+  const perPage = 1000
+  let page = 1
+
+  for (;;) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage })
+    if (error) throw error
+
+    if (data.users.some(u => u.email?.toLowerCase() === target)) {
+      return true
+    }
+    if (data.users.length < perPage) {
+      return false
+    }
+    page++
+  }
 }
