@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard,
   Users,
+  Boxes,
   ArrowLeftRight,
   LogOut,
   ShieldCheck,
@@ -15,6 +16,7 @@ import {
 const navItems = [
   { href: '/admin',           label: 'Overview',  icon: LayoutDashboard, exact: true },
   { href: '/admin/customers', label: 'Customers', icon: Users },
+  { href: '/admin/services',  label: 'Services',  icon: Boxes },
 ]
 
 interface AdminSidebarProps {

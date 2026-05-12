@@ -9,12 +9,19 @@ import {
   XCircle,
 } from 'lucide-react'
 
+interface WebsiteService {
+  id:          string
+  key:         string
+  name:        string
+  icon:        string | null
+  description: string | null
+}
+
 interface Website {
   id:                       string
   domain:                   string
   display_name:             string | null
-  analytics_enabled:        boolean
-  uptime_enabled:           boolean
+  services:                 WebsiteService[]
   uptime_status?:           string | null
   uptime_percentage?:       number | string | null
   uptime_last_checked_at?:  string | null
@@ -68,7 +75,8 @@ export default async function WebsitesPage() {
 }
 
 function WebsiteRow({ site }: { site: Website }) {
-  const status = (site.uptime_status ?? (site.uptime_enabled ? 'unknown' : null)) as
+  const uptimeAttached = site.services.some(s => s.key === 'uptime')
+  const status = (site.uptime_status ?? (uptimeAttached ? 'unknown' : null)) as
     | 'up'
     | 'down'
     | 'paused'
@@ -103,19 +111,14 @@ function WebsiteRow({ site }: { site: Website }) {
 
           {/* Active services */}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            {!site.analytics_enabled && !site.uptime_enabled ? (
+            {site.services.length === 0 ? (
               <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-navy-200 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-navy-500">
                 No services enabled
               </span>
             ) : (
-              <>
-                {site.analytics_enabled && (
-                  <ServiceBadge icon={BarChart3} label="Analytics" />
-                )}
-                {site.uptime_enabled && (
-                  <ServiceBadge icon={Activity} label="Uptime" />
-                )}
-              </>
+              site.services.map(svc => (
+                <ServiceBadge key={svc.id} iconName={svc.icon} label={svc.name} />
+              ))
             )}
           </div>
         </div>
@@ -124,7 +127,7 @@ function WebsiteRow({ site }: { site: Website }) {
       {/* Right: status + uptime stat */}
       <div className="flex shrink-0 items-center gap-3 md:flex-col md:items-end md:gap-1.5">
         <StatusPill status={status} />
-        {site.uptime_enabled && (
+        {uptimeAttached && (
           <p className="text-[11px] text-navy-500">
             {pct !== null && !Number.isNaN(pct)
               ? <><strong className="text-navy-700">{pct.toFixed(2)}%</strong> uptime</>
@@ -141,13 +144,23 @@ function WebsiteRow({ site }: { site: Website }) {
   )
 }
 
+const ICON_MAP: Record<string, React.ElementType> = {
+  BarChart3,
+  Activity,
+  Globe,
+  Clock,
+  CheckCircle,
+  XCircle,
+}
+
 function ServiceBadge({
-  icon: Icon,
+  iconName,
   label,
 }: {
-  icon: React.ElementType
+  iconName: string | null
   label: string
 }) {
+  const Icon = (iconName && ICON_MAP[iconName]) || Globe
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-brand-100 bg-brand-50/80 px-2 py-0.5 text-[10px] font-semibold text-brand-700">
       <Icon className="h-2.5 w-2.5" />
