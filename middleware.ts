@@ -29,8 +29,13 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Redirect unauthenticated users away from portal
-  if (!user && request.nextUrl.pathname.startsWith('/portal')) {
+  // Redirect unauthenticated users away from portal + admin areas.
+  // (Admin-vs-customer authorisation is enforced in app/admin/layout.tsx.)
+  const protectedPath =
+    request.nextUrl.pathname.startsWith('/portal') ||
+    request.nextUrl.pathname.startsWith('/admin')
+
+  if (!user && protectedPath) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     return NextResponse.redirect(url)

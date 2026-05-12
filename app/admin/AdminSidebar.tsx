@@ -6,32 +6,22 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   LayoutDashboard,
-  BarChart3,
-  Megaphone,
-  Activity,
-  User,
-  CreditCard,
+  Users,
+  ArrowLeftRight,
   LogOut,
   ShieldCheck,
 } from 'lucide-react'
 
 const navItems = [
-  { href: '/portal',              label: 'Dashboard',    icon: LayoutDashboard, exact: true },
-  { href: '/portal/analytics',    label: 'Analytics',    icon: BarChart3 },
-  { href: '/portal/social',       label: "What's on",    icon: Megaphone },
-  { href: '/portal/uptime',       label: 'Uptime',       icon: Activity },
-  { href: '/portal/account',      label: 'Account',      icon: User },
-  { href: '/portal/subscription', label: 'Subscription', icon: CreditCard },
+  { href: '/admin',           label: 'Overview',  icon: LayoutDashboard, exact: true },
+  { href: '/admin/customers', label: 'Customers', icon: Users },
 ]
 
-interface SidebarProps {
+interface AdminSidebarProps {
   email: string
-  name: string | null
-  company: string | null
-  isAdmin?: boolean
 }
 
-export default function Sidebar({ email, name, company, isAdmin = false }: SidebarProps) {
+export default function AdminSidebar({ email }: AdminSidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
@@ -42,14 +32,11 @@ export default function Sidebar({ email, name, company, isAdmin = false }: Sideb
     router.refresh()
   }
 
-  const initials =
-    (company ?? name ?? email).trim().split(/\s+/).slice(0, 2).map(p => p[0]).join('').toUpperCase() || 'W'
-
   return (
     <aside className="w-[var(--sidebar-width)] shrink-0 flex h-full flex-col border-r border-navy-100 bg-white/70 backdrop-blur-sm">
       {/* Brand */}
       <div className="border-b border-navy-100 px-5 py-5">
-        <Link href="/portal" className="flex items-center gap-3">
+        <Link href="/admin" className="flex items-center gap-3">
           <Image
             src="/wolds-digital-logo.png"
             alt="Wolds Digital"
@@ -63,8 +50,9 @@ export default function Sidebar({ email, name, company, isAdmin = false }: Sideb
               <span className="text-navy-900">Wolds</span>{' '}
               <span className="text-brand-500">Digital</span>
             </p>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-navy-400 leading-tight mt-0.5">
-              Client Portal
+            <p className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-700 leading-tight">
+              <ShieldCheck className="h-3 w-3" />
+              Admin
             </p>
           </div>
         </Link>
@@ -94,34 +82,27 @@ export default function Sidebar({ email, name, company, isAdmin = false }: Sideb
           )
         })}
 
-        {isAdmin && (
-          <div className="pt-4">
-            <p className="px-4 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-navy-400">
-              Internal
-            </p>
-            <Link
-              href="/admin"
-              className="group flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium text-navy-600 transition hover:bg-brand-50 hover:text-brand-700"
-            >
-              <ShieldCheck className="h-4 w-4 shrink-0 text-brand-500" />
-              Admin
-            </Link>
-          </div>
-        )}
+        <div className="pt-4">
+          <p className="px-4 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-navy-400">
+            Switch view
+          </p>
+          <Link
+            href="/portal"
+            className="group flex items-center gap-3 rounded-full px-4 py-2.5 text-sm font-medium text-navy-600 transition hover:bg-navy-50 hover:text-navy-900"
+          >
+            <ArrowLeftRight className="h-4 w-4 shrink-0 text-navy-400 group-hover:text-navy-600" />
+            Client view
+          </Link>
+        </div>
       </nav>
 
       {/* User footer */}
       <div className="px-3 py-4 border-t border-navy-100">
-        <div className="flex items-center gap-3 px-2 py-2 mb-2">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-700 text-xs font-bold">
-            {initials}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-navy-900 leading-tight">
-              {company ?? name ?? 'My Account'}
-            </p>
-            <p className="truncate text-xs text-navy-500 leading-tight mt-0.5">{email}</p>
-          </div>
+        <div className="px-3 py-2 mb-1">
+          <p className="text-xs font-semibold text-navy-900 leading-tight">
+            Signed in as
+          </p>
+          <p className="truncate text-xs text-navy-500 leading-tight mt-0.5">{email}</p>
         </div>
         <button
           onClick={signOut}
