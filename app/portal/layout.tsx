@@ -33,14 +33,28 @@ export default async function PortalLayout({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="relative flex h-screen overflow-hidden bg-page-gradient">
+      {/* Ambient colour blobs — give the glass sidebar something to refract. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-32 -left-24 h-[28rem] w-[28rem] rounded-full bg-brand-200/45 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-40 right-[-8rem] h-[32rem] w-[32rem] rounded-full bg-navy-200/40 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute bottom-[-12rem] left-[18rem] h-[26rem] w-[26rem] rounded-full bg-brand-100/40 blur-3xl"
+      />
+
       <Sidebar
         email={user.email ?? ''}
         name={profile?.full_name ?? null}
         company={profile?.company_name ?? null}
         isAdmin={isAdmin}
       />
-      <main className="flex-1 overflow-y-auto">
+      <main className="relative flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-6 py-10 md:px-8 md:py-12">
           {children}
         </div>
