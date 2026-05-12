@@ -3,27 +3,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
+  Activity,
   AlertTriangle,
+  BarChart3,
   Boxes,
   CheckCircle2,
-  ChevronRight,
   ExternalLink,
   Globe,
   Loader2,
+  Megaphone,
   Pencil,
   Plus,
   RefreshCw,
   Save,
+  ShieldCheck,
   Trash2,
   X,
+  Zap,
 } from 'lucide-react'
-import { DataForm } from '../services/[id]/ServiceEditor'
 import type {
-  ServiceAuthType,
-  ServiceWithAuth,
-  SettingsSchema,
-  SiteServiceStatus,
-} from '@/lib/services/types'
+  Integration,
+  IntegrationStatus,
+} from '@/lib/integrations/types'
 
 interface Site {
   id:           string
@@ -31,19 +32,18 @@ interface Site {
   display_name: string | null
 }
 
-interface SiteServiceListItem {
+interface SiteIntegrationListItem {
   id:                   string
   site_id:              string
-  service_id:           string
-  service_key:          string
-  service_name:         string
-  service_icon:         string | null
-  auth_type_id:         string | null
-  auth_type:            string | null
-  auth_type_label:      string | null
-  credentials:          Record<string, unknown> | null
-  status:               SiteServiceStatus
+  integration_id:       string
+  integration_key:      string
+  integration_name:     string
+  integration_icon:     string | null
+  integration_provider: string | null
+  config:               Record<string, unknown> | null
+  status:               IntegrationStatus
   provider_resource_id: string | null
+  provider_metadata:    Record<string, unknown> | null
   last_error:           string | null
   provisioned_at:       string | null
   created_at:           string
@@ -57,23 +57,28 @@ interface Props {
   initialCount:  number
 }
 
+const ICON_MAP: Record<string, React.ElementType> = {
+  Activity, BarChart3, Boxes, Globe, Megaphone, ShieldCheck, Zap,
+}
+
 export default function ManageSitesButton({
   customerId,
   customerEmail,
   customerName,
   initialCount,
 }: Props) {
-  const [open, setOpen]                       = useState(false)
-  const [sites, setSites]                     = useState<Site[] | null>(null)
-  const [services, setServices]               = useState<ServiceWithAuth[]>([])
-  const [linksBySite, setLinksBySite]         = useState<Record<string, SiteServiceListItem[]>>({})
-  const [loading, setLoading]                 = useState(false)
-  const [error, setError]                     = useState<string | null>(null)
-  const [pending, setPending]                 = useState<Set<string>>(new Set())
-  const [assignment, setAssignment]           = useState<{
-    site:    Site
-    service: ServiceWithAuth
-    existing: SiteServiceListItem | null
+  const [open, setOpen]                 = useState(false)
+  const [sites, setSites]               = useState<Site[] | null>(null)
+  const [integrations, setIntegrations] = useState<Integration[]>([])
+  const [linksBySite, setLinksBySite]   = useState<Record<string, SiteIntegrationListItem[]>>({})
+  const [loading, setLoading]           = useState(false)
+  const [error, setError]               = useState<string | null>(null)
+  const [pending, setPending]           = useState<Set<string>>(new Set())
+
+  const [assignment, setAssignment] = useState<{
+    site:        Site
+    integration: Integration
+    existing:    SiteIntegrationListItem | null
   } | null>(null)
 
   const [domain, setDomain]   = useState('')
@@ -90,7 +95,7 @@ export default function ManageSitesButton({
     setTimeout(() => {
       setSites(null)
       setLinksBySite({})
-      setServices([])
+      setIntegrations([])
       setError(null)
       setDomain('')
       setDisplay('')
@@ -115,39 +120,39 @@ export default function ManageSitesButton({
 
     ;(async () => {
       try {
-        const [sitesRes, servicesRes] = await Promise.all([
+        const [sitesRes, intsRes] = await Promise.all([
           fetch(`/api/admin/customers/${customerId}/sites`),
-          fetch(`/api/admin/services`),
+          fetch(`/api/admin/integrations`),
         ])
-        const sitesData    = await sitesRes.json().catch(() => ({})) as {
+        const sitesData = await sitesRes.json().catch(() => ({})) as {
           sites?: Site[]
           error?: string
         }
-        const servicesData = await servicesRes.json().catch(() => ({})) as {
-          services?: ServiceWithAuth[]
-          error?:    string
+        const intsData  = await intsRes.json().catch(() => ({})) as {
+          integrations?: Integration[]
+          error?:        string
         }
         if (aborted) return
 
-        if (!sitesRes.ok)    throw new Error(sitesData.error    ?? 'Could not load sites.')
-        if (!servicesRes.ok) throw new Error(servicesData.error ?? 'Could not load services.')
+        if (!sitesRes.ok) throw new Error(sitesData.error ?? 'Could not load sites.')
+        if (!intsRes.ok)  throw new Error(intsData.error  ?? 'Could not load integrations.')
 
-        const sitesArr    = sitesData.sites ?? []
-        const servicesArr = (servicesData.services ?? []).filter(s => s.enabled)
+        const sitesArr = sitesData.sites ?? []
+        const intsArr  = (intsData.integrations ?? []).filter(i => i.enabled)
 
         setSites(sitesArr)
-        setServices(servicesArr)
+        setIntegrations(intsArr)
 
         const linkResults = await Promise.all(
           sitesArr.map(async site => {
-            const r = await fetch(`/api/admin/sites/${site.id}/services`)
-            const d = await r.json().catch(() => ({})) as { links?: SiteServiceListItem[] }
+            const r = await fetch(`/api/admin/sites/${site.id}/integrations`)
+            const d = await r.json().catch(() => ({})) as { links?: SiteIntegrationListItem[] }
             return [site.id, d.links ?? []] as const
-          })
+          }),
         )
         if (aborted) return
 
-        const next: Record<string, SiteServiceListItem[]> = {}
+        const next: Record<string, SiteIntegrationListItem[]> = {}
         for (const [siteId, links] of linkResults) next[siteId] = links
         setLinksBySite(next)
       } catch (err) {
@@ -160,28 +165,29 @@ export default function ManageSitesButton({
     return () => { aborted = true }
   }, [open, customerId])
 
-  function findLink(siteId: string, serviceId: string): SiteServiceListItem | undefined {
-    return (linksBySite[siteId] ?? []).find(l => l.service_id === serviceId)
+  async function fetchLink(
+    siteId: string,
+    linkId: string,
+  ): Promise<SiteIntegrationListItem | null> {
+    const r = await fetch(`/api/admin/sites/${siteId}/integrations`)
+    const d = await r.json().catch(() => ({})) as { links?: SiteIntegrationListItem[] }
+    return (d.links ?? []).find(l => l.id === linkId) ?? null
   }
 
-  /**
-   * Remove a live service. Calls the provisioning orchestrator so the
-   * external resource (e.g. Better Stack monitor) is torn down first;
-   * the orchestrator then sets `status='cancelled'` on the row. If the
-   * provider call fails, the row ends up as `status='error'` with a
-   * `last_error` message, so we refetch the row to surface it.
-   */
-  async function removeService(site: Site, link: SiteServiceListItem) {
-    const key = `${site.id}:${link.service_id}`
+  async function removeIntegration(site: Site, link: SiteIntegrationListItem) {
+    const key = `${site.id}:${link.integration_id}`
     setPending(prev => new Set(prev).add(key))
     setError(null)
     try {
-      const res = await fetch('/api/admin/provision-service', {
+      const res = await fetch('/api/admin/provision-integration', {
         method:  'POST',
         headers: { 'content-type': 'application/json' },
-        body:    JSON.stringify({ action: 'deprovision', site_service_id: link.id }),
+        body:    JSON.stringify({
+          action:              'deprovision',
+          site_integration_id: link.id,
+        }),
       })
-      const data = (await res.json().catch(() => ({}))) as { status?: string; error?: string }
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) {
         const fresh = await fetchLink(site.id, link.id)
         if (fresh) {
@@ -190,7 +196,7 @@ export default function ManageSitesButton({
             [site.id]: (prev[site.id] ?? []).map(l => (l.id === link.id ? fresh : l)),
           }))
         }
-        throw new Error(data.error ?? 'Could not remove service.')
+        throw new Error(data.error ?? 'Could not remove integration.')
       }
       setLinksBySite(prev => ({
         ...prev,
@@ -210,19 +216,18 @@ export default function ManageSitesButton({
     }
   }
 
-  /**
-   * Re-run provisioning for a link that's in error/pending state
-   * (e.g. provider was down, credentials were wrong, etc.).
-   */
-  async function retryProvision(site: Site, link: SiteServiceListItem) {
-    const key = `${site.id}:${link.service_id}`
+  async function retryProvision(site: Site, link: SiteIntegrationListItem) {
+    const key = `${site.id}:${link.integration_id}`
     setPending(prev => new Set(prev).add(key))
     setError(null)
     try {
-      const res = await fetch('/api/admin/provision-service', {
+      const res = await fetch('/api/admin/provision-integration', {
         method:  'POST',
         headers: { 'content-type': 'application/json' },
-        body:    JSON.stringify({ action: 'provision', site_service_id: link.id }),
+        body:    JSON.stringify({
+          action:              'provision',
+          site_integration_id: link.id,
+        }),
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string }
       const fresh = await fetchLink(site.id, link.id)
@@ -243,18 +248,9 @@ export default function ManageSitesButton({
     }
   }
 
-  async function fetchLink(siteId: string, linkId: string): Promise<SiteServiceListItem | null> {
-    // The list endpoint already returns the joined view we display, so
-    // re-fetching the whole list for one site is the simplest way to
-    // pull a single row's latest state.
-    const r = await fetch(`/api/admin/sites/${siteId}/services`)
-    const d = await r.json().catch(() => ({})) as { links?: SiteServiceListItem[] }
-    return (d.links ?? []).find(l => l.id === linkId) ?? null
-  }
-
-  function handleAssignmentSaved(siteId: string, updated: SiteServiceListItem) {
+  function handleAssignmentSaved(siteId: string, updated: SiteIntegrationListItem) {
     setLinksBySite(prev => {
-      const existing = (prev[siteId] ?? [])
+      const existing = prev[siteId] ?? []
       const idx      = existing.findIndex(l => l.id === updated.id)
       const next     = idx >= 0
         ? existing.map((l, i) => (i === idx ? updated : l))
@@ -321,12 +317,12 @@ export default function ManageSitesButton({
                   Admin
                 </p>
                 <h2 className="mt-1 truncate text-lg font-bold text-navy-900">
-                  Manage websites &amp; services<span className="text-brand-500">.</span>
+                  Manage websites &amp; integrations<span className="text-brand-500">.</span>
                 </h2>
                 <p className="mt-0.5 truncate text-xs text-navy-500">
                   for <span className="text-navy-700">{customerLabel}</span>
                   {!loading && totalActive > 0 && (
-                    <> · <span className="text-navy-700">{totalActive} service{totalActive === 1 ? '' : 's'} active or pending</span></>
+                    <> · <span className="text-navy-700">{totalActive} integration{totalActive === 1 ? '' : 's'} live or pending</span></>
                   )}
                 </p>
               </div>
@@ -347,7 +343,6 @@ export default function ManageSitesButton({
             )}
 
             <div className="flex-1 space-y-5 overflow-y-auto px-6 py-5">
-              {/* Sites */}
               <section>
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-navy-500">
                   Linked websites
@@ -364,13 +359,13 @@ export default function ManageSitesButton({
                       <SiteRow
                         key={site.id}
                         site={site}
-                        services={services}
+                        integrations={integrations}
                         links={linksBySite[site.id] ?? []}
                         pending={pending}
-                        onAttachOrEdit={(service, existing) =>
-                          setAssignment({ site, service, existing })
+                        onAttachOrEdit={(integration, existing) =>
+                          setAssignment({ site, integration, existing })
                         }
-                        onRemove={removeService}
+                        onRemove={removeIntegration}
                         onRetry={retryProvision}
                       />
                     ))}
@@ -382,7 +377,6 @@ export default function ManageSitesButton({
                 )}
               </section>
 
-              {/* Add domain */}
               <section className="border-t border-navy-100 pt-5">
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-navy-500">
                   Link a new domain
@@ -440,9 +434,9 @@ export default function ManageSitesButton({
       )}
 
       {assignment && (
-        <ServiceAssignmentModal
+        <IntegrationAssignmentModal
           site={assignment.site}
-          service={assignment.service}
+          integration={assignment.integration}
           existing={assignment.existing}
           onClose={() => setAssignment(null)}
           onSaved={updated => {
@@ -478,7 +472,7 @@ export default function ManageSitesButton({
 
 function SiteRow({
   site,
-  services,
+  integrations,
   links,
   pending,
   onAttachOrEdit,
@@ -486,12 +480,12 @@ function SiteRow({
   onRetry,
 }: {
   site:           Site
-  services:       ServiceWithAuth[]
-  links:          SiteServiceListItem[]
+  integrations:   Integration[]
+  links:          SiteIntegrationListItem[]
   pending:        Set<string>
-  onAttachOrEdit: (service: ServiceWithAuth, existing: SiteServiceListItem | null) => void
-  onRemove:       (site: Site, link: SiteServiceListItem) => Promise<void>
-  onRetry:        (site: Site, link: SiteServiceListItem) => Promise<void>
+  onAttachOrEdit: (integration: Integration, existing: SiteIntegrationListItem | null) => void
+  onRemove:       (site: Site, link: SiteIntegrationListItem) => Promise<void>
+  onRetry:        (site: Site, link: SiteIntegrationListItem) => Promise<void>
 }) {
   return (
     <li className="rounded-xl border border-navy-100 bg-white p-3">
@@ -515,54 +509,52 @@ function SiteRow({
         </a>
       </div>
 
-      {services.length === 0 ? (
+      {integrations.length === 0 ? (
         <p className="mt-3 rounded-lg border border-dashed border-navy-200 bg-navy-50/40 px-3 py-2 text-[11px] text-navy-500">
-          No service offerings exist yet. Define one in{' '}
-          <a href="/admin/services" className="font-semibold text-brand-700 underline-offset-2 hover:underline">
-            Services
+          No integrations defined. Add one in{' '}
+          <a href="/admin/integrations" className="font-semibold text-brand-700 underline-offset-2 hover:underline">
+            Integrations
           </a>.
         </p>
       ) : (
         <ul className="mt-3 space-y-2">
-          {services.map(svc => {
-            const link        = links.find(l => l.service_id === svc.id) ?? null
-            const isPending   = pending.has(`${site.id}:${svc.id}`)
-            const isLive      = link && link.status !== 'cancelled'
-            const optionCount = svc.auth_options?.length ?? 0
+          {integrations.map(integration => {
+            const link      = links.find(l => l.integration_id === integration.id) ?? null
+            const isPending = pending.has(`${site.id}:${integration.id}`)
+            const isLive    = link && link.status !== 'cancelled'
+            const Icon      = (integration.icon && ICON_MAP[integration.icon]) || Boxes
 
             return (
               <li
-                key={svc.id}
+                key={integration.id}
                 className="flex flex-col gap-2 rounded-xl border border-navy-100 bg-white px-3 py-2.5 md:flex-row md:items-center md:justify-between"
               >
                 <div className="flex min-w-0 flex-1 items-start gap-2.5">
                   <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700 ring-1 ring-brand-100">
-                    <Boxes className="h-3.5 w-3.5" />
+                    <Icon className="h-3.5 w-3.5" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <p className="truncate text-xs font-semibold text-navy-900">{svc.name}</p>
+                      <p className="truncate text-xs font-semibold text-navy-900">{integration.name}</p>
                       {isLive && link && <StatusBadge status={link.status} />}
-                      {!isLive && optionCount === 0 && (
-                        <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 ring-1 ring-amber-200">
-                          no auth method
-                        </span>
-                      )}
                     </div>
-                    {isLive && link?.auth_type_label && (
-                      <p className="truncate text-[10px] text-navy-500">
-                        via <span className="font-semibold text-navy-700">{link.auth_type_label}</span>
-                      </p>
-                    )}
                     {isLive && link?.provider_resource_id && (
                       <p className="truncate text-[10px] text-navy-400">
-                        ID: <code>{link.provider_resource_id}</code>
+                        {link.integration_provider === 'betterstack' ? 'Monitor' : 'Resource'} ID:{' '}
+                        <code>{link.provider_resource_id}</code>
                       </p>
                     )}
                     {isLive && link?.status === 'error' && link.last_error && (
                       <p className="mt-1 inline-flex items-start gap-1 rounded-md bg-red-50 px-1.5 py-0.5 text-[10px] text-red-700">
                         <AlertTriangle className="mt-0.5 h-2.5 w-2.5 shrink-0" />
                         {link.last_error}
+                      </p>
+                    )}
+                    {isLive && link?.provisioned_at && link.status === 'active' && (
+                      <p className="text-[10px] text-navy-400">
+                        Provisioned {new Date(link.provisioned_at).toLocaleDateString('en-GB', {
+                          day: 'numeric', month: 'short', year: 'numeric',
+                        })}
                       </p>
                     )}
                   </div>
@@ -585,14 +577,16 @@ function SiteRow({
                           Retry
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => onAttachOrEdit(svc, link)}
-                        className="inline-flex items-center gap-1 rounded-full border border-navy-100 bg-white px-2.5 py-1 text-[10px] font-semibold text-navy-700 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
-                      >
-                        <Pencil className="h-2.5 w-2.5" />
-                        Edit
-                      </button>
+                      {hasConfigFields(integration.key) && (
+                        <button
+                          type="button"
+                          onClick={() => onAttachOrEdit(integration, link)}
+                          className="inline-flex items-center gap-1 rounded-full border border-navy-100 bg-white px-2.5 py-1 text-[10px] font-semibold text-navy-700 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+                        >
+                          <Pencil className="h-2.5 w-2.5" />
+                          Edit
+                        </button>
+                      )}
                       <button
                         type="button"
                         disabled={isPending}
@@ -608,9 +602,8 @@ function SiteRow({
                   ) : (
                     <button
                       type="button"
-                      disabled={optionCount === 0}
-                      onClick={() => onAttachOrEdit(svc, link)}
-                      className="inline-flex items-center gap-1 rounded-full bg-navy-900 px-3 py-1 text-[10px] font-semibold text-white transition hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={() => onAttachOrEdit(integration, link)}
+                      className="inline-flex items-center gap-1 rounded-full bg-navy-900 px-3 py-1 text-[10px] font-semibold text-white transition hover:bg-navy-800"
                     >
                       <Plus className="h-2.5 w-2.5" />
                       {link ? 'Re-enable' : 'Add'}
@@ -628,18 +621,19 @@ function SiteRow({
 
 /* ──────────────────────────────────────── Status badge ───────────────────────── */
 
-function StatusBadge({ status }: { status: SiteServiceStatus }) {
-  const styles: Record<SiteServiceStatus, { bg: string; text: string; ring: string; label: string }> = {
-    active:       { bg: 'bg-brand-50',   text: 'text-brand-700', ring: 'ring-brand-100',  label: 'active'       },
-    pending:      { bg: 'bg-amber-50',   text: 'text-amber-700', ring: 'ring-amber-200',  label: 'pending'      },
-    provisioning: { bg: 'bg-amber-50',   text: 'text-amber-700', ring: 'ring-amber-200',  label: 'provisioning' },
-    error:        { bg: 'bg-red-50',     text: 'text-red-700',   ring: 'ring-red-200',    label: 'error'        },
-    suspended:    { bg: 'bg-navy-50',    text: 'text-navy-600',  ring: 'ring-navy-100',   label: 'suspended'    },
-    cancelled:    { bg: 'bg-navy-50',    text: 'text-navy-600',  ring: 'ring-navy-100',   label: 'cancelled'    },
+function StatusBadge({ status }: { status: IntegrationStatus }) {
+  const styles: Record<IntegrationStatus, { bg: string; text: string; ring: string; label: string }> = {
+    active:       { bg: 'bg-brand-50', text: 'text-brand-700', ring: 'ring-brand-100', label: 'Active'        },
+    pending:      { bg: 'bg-amber-50', text: 'text-amber-700', ring: 'ring-amber-200', label: 'Pending'       },
+    provisioning: { bg: 'bg-amber-50', text: 'text-amber-700', ring: 'ring-amber-200', label: 'Provisioning…' },
+    error:        { bg: 'bg-red-50',   text: 'text-red-700',   ring: 'ring-red-200',   label: 'Error'         },
+    suspended:    { bg: 'bg-navy-50',  text: 'text-navy-600',  ring: 'ring-navy-100',  label: 'Suspended'     },
+    cancelled:    { bg: 'bg-navy-50',  text: 'text-navy-600',  ring: 'ring-navy-100',  label: 'Cancelled'     },
   }
   const s = styles[status] ?? styles.cancelled
   return (
-    <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${s.bg} ${s.text} ring-1 ${s.ring}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${s.bg} ${s.text} ring-1 ${s.ring}`}>
+      {status === 'provisioning' && <Loader2 className="h-2 w-2 animate-spin" />}
       {s.label}
     </span>
   )
@@ -647,74 +641,71 @@ function StatusBadge({ status }: { status: SiteServiceStatus }) {
 
 /* ──────────────────────────────────────── Assignment modal ───────────────────────── */
 
-function ServiceAssignmentModal({
+/** Does this integration key actually need any per-site form fields? */
+function hasConfigFields(key: string): boolean {
+  return key === 'analytics' || key === 'whats_on'
+}
+
+function IntegrationAssignmentModal({
   site,
-  service,
+  integration,
   existing,
   onSaved,
   onClose,
 }: {
-  site:       Site
-  service:    ServiceWithAuth
-  existing:   SiteServiceListItem | null
-  onSaved:    (link: SiteServiceListItem) => void
-  onClose:    () => void
+  site:        Site
+  integration: Integration
+  existing:    SiteIntegrationListItem | null
+  onSaved:     (link: SiteIntegrationListItem) => void
+  onClose:     () => void
 }) {
-  // when editing, the auth method is locked to whatever is in `existing`
-  const lockedOption = useMemo<ServiceAuthType | null>(() => {
-    if (!existing || !existing.auth_type_id) return null
-    return service.auth_options.find(o => o.id === existing.auth_type_id) ?? null
-  }, [existing, service])
+  // Analytics provider sub-picker (GA4 vs Plausible)
+  type AnalyticsProvider = 'ga4' | 'plausible'
+  const existingProvider: AnalyticsProvider | null =
+    (existing?.config?.provider as AnalyticsProvider | undefined) ?? null
 
-  const initialOptionId = useMemo(() => {
-    if (lockedOption) return lockedOption.id
-    const def = service.auth_options.find(o => o.is_default)
-    return def?.id ?? service.auth_options[0]?.id ?? ''
-  }, [service, lockedOption])
-
-  const [optionId, setOptionId] = useState<string>(initialOptionId)
-  const selectedOption = useMemo<ServiceAuthType | null>(
-    () => service.auth_options.find(o => o.id === optionId) ?? null,
-    [service, optionId]
+  const [analyticsProvider, setAnalyticsProvider] = useState<AnalyticsProvider>(
+    existingProvider ?? 'ga4',
   )
-  const schema: SettingsSchema =
-    selectedOption?.settings_schema ?? { fields: [] }
-
-  const [values, setValues] = useState<Record<string, unknown>>(() => {
-    const start = existing?.credentials ?? {}
-    const merged: Record<string, unknown> = { ...start }
-    for (const f of schema.fields) {
-      if (merged[f.key] === undefined && f.default !== undefined) {
-        merged[f.key] = f.default
-      }
-    }
-    return merged
-  })
-
-  // Reset values when the user picks a different auth option (only when not editing).
-  useEffect(() => {
-    if (existing) return
-    if (!selectedOption) {
-      setValues({})
-      return
-    }
-    const next: Record<string, unknown> = {}
-    for (const f of selectedOption.settings_schema?.fields ?? []) {
-      if (f.default !== undefined) next[f.key] = f.default
-    }
-    setValues(next)
-  }, [selectedOption, existing])
+  const [propertyId, setPropertyId] = useState<string>(
+    (existing?.config?.property_id as string | undefined) ?? '',
+  )
+  const [plausibleDomain, setPlausibleDomain] = useState<string>(
+    (existing?.config?.domain as string | undefined) ?? '',
+  )
+  const [organizationId, setOrganizationId] = useState<string>(
+    (existing?.config?.organization_id as string | undefined) ?? '',
+  )
 
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState<string | null>(null)
 
+  /** Build the `config` JSON object to send to the API. */
+  const config = useMemo<Record<string, unknown>>(() => {
+    switch (integration.key) {
+      case 'analytics':
+        if (analyticsProvider === 'ga4') {
+          return { provider: 'ga4', property_id: propertyId.trim() }
+        }
+        return { provider: 'plausible', domain: plausibleDomain.trim() }
+      case 'whats_on': {
+        const t = organizationId.trim()
+        return t ? { organization_id: t } : {}
+      }
+      case 'uptime':
+      case 'ssl':
+      default:
+        return {}
+    }
+  }, [integration.key, analyticsProvider, propertyId, plausibleDomain, organizationId])
+
   function validate(): string | null {
-    if (!selectedOption) return 'Pick a connection method to continue.'
-    for (const f of schema.fields) {
-      if (!f.required) continue
-      const v = values[f.key]
-      if (v === undefined || v === null || v === '') {
-        return `${f.label} is required.`
+    if (integration.key === 'analytics') {
+      if (analyticsProvider === 'ga4' && !propertyId.trim()) {
+        return 'Measurement ID is required.'
+      }
+      if (analyticsProvider === 'plausible' && !plausibleDomain.trim()) {
+        return 'Plausible domain is required.'
       }
     }
     return null
@@ -727,106 +718,87 @@ function ServiceAssignmentModal({
 
     setSaving(true)
     setError(null)
+
     try {
-      const cleaned: Record<string, unknown> = {}
-      for (const f of schema.fields) {
-        const raw = values[f.key]
-        if (raw === '' || raw === undefined || raw === null) {
-          if (f.required) {
-            setError(`${f.label} is required.`)
-            setSaving(false)
-            return
-          }
-          continue
-        }
-        cleaned[f.key] = raw
-      }
-
-      let res:  Response
-      let body: { id?: string; status?: SiteServiceStatus; error?: string; ok?: boolean }
-
       if (existing) {
-        res = await fetch(`/api/admin/sites/${site.id}/services/${existing.id}`, {
-          method:  'PATCH',
-          headers: { 'content-type': 'application/json' },
-          body:    JSON.stringify({ credentials: cleaned }),
-        })
-        body = (await res.json().catch(() => ({}))) as typeof body
-        if (!res.ok || !body.ok) throw new Error(body.error ?? 'Save failed.')
+        // Edit: just update config; no re-provision (analytics/whats_on
+        // don't have external resources).
+        const res = await fetch(
+          `/api/admin/sites/${site.id}/integrations/${existing.id}`,
+          {
+            method:  'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body:    JSON.stringify({ config }),
+          },
+        )
+        const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string }
+        if (!res.ok || !data.ok) throw new Error(data.error ?? 'Save failed.')
 
         onSaved({
           ...existing,
-          credentials: cleaned,
-          status:      existing.status === 'cancelled' ? 'active' : existing.status,
-          last_error:  null,
+          config,
+          status:     existing.status === 'cancelled' ? 'active' : existing.status,
+          last_error: null,
         })
-      } else {
-        // 1. Insert the site_services row (status defaults to
-        //    `pending` for provisioning services, `active` otherwise).
-        res = await fetch(`/api/admin/sites/${site.id}/services`, {
+        return
+      }
+
+      // Create + provision
+      const insertRes = await fetch(`/api/admin/sites/${site.id}/integrations`, {
+        method:  'POST',
+        headers: { 'content-type': 'application/json' },
+        body:    JSON.stringify({
+          integration_id: integration.id,
+          config,
+        }),
+      })
+      const insertBody = (await insertRes.json().catch(() => ({}))) as {
+        id?: string; status?: IntegrationStatus; error?: string
+      }
+      if (!insertRes.ok || !insertBody.id) {
+        throw new Error(insertBody.error ?? 'Could not attach integration.')
+      }
+      const newLinkId = insertBody.id
+
+      let provErr: string | null = null
+      try {
+        const provRes = await fetch('/api/admin/provision-integration', {
           method:  'POST',
           headers: { 'content-type': 'application/json' },
           body:    JSON.stringify({
-            service_id:   service.id,
-            auth_type_id: selectedOption!.id,
-            credentials:  cleaned,
+            action:              'provision',
+            site_integration_id: newLinkId,
           }),
         })
-        body = (await res.json().catch(() => ({}))) as typeof body
-        if (!res.ok || !body.id) throw new Error(body.error ?? 'Could not attach service.')
-
-        const newLinkId = body.id
-
-        // 2. Trigger provisioning. For non-provisioning services this
-        //    just stamps `status='active' + provisioned_at`; for the
-        //    others (uptime, ssl, ...) this hits the external API.
-        //    Either way we read the live row back to grab the final
-        //    status / provider_resource_id / last_error.
-        let provErr: string | null = null
-        try {
-          const provRes = await fetch('/api/admin/provision-service', {
-            method:  'POST',
-            headers: { 'content-type': 'application/json' },
-            body:    JSON.stringify({
-              action:          'provision',
-              site_service_id: newLinkId,
-            }),
-          })
-          if (!provRes.ok) {
-            const provBody = (await provRes.json().catch(() => ({}))) as { error?: string }
-            provErr = provBody.error ?? 'Provisioning failed.'
-          }
-        } catch {
-          provErr = 'Provisioning request failed.'
+        if (!provRes.ok) {
+          const provBody = (await provRes.json().catch(() => ({}))) as { error?: string }
+          provErr = provBody.error ?? 'Provisioning failed.'
         }
-
-        // 3. Re-read the link so we surface the final server-side
-        //    state (provider_resource_id, last_error, etc.).
-        const r = await fetch(`/api/admin/sites/${site.id}/services`)
-        const d = await r.json().catch(() => ({})) as { links?: SiteServiceListItem[] }
-        const fresh = (d.links ?? []).find(l => l.id === newLinkId)
-
-        onSaved(fresh ?? {
-          id:                   newLinkId,
-          site_id:              site.id,
-          service_id:           service.id,
-          service_key:          service.key,
-          service_name:         service.name,
-          service_icon:         service.icon,
-          auth_type_id:         selectedOption!.id,
-          auth_type:            selectedOption!.auth_type,
-          auth_type_label:      selectedOption!.label,
-          credentials:          cleaned,
-          status:               provErr ? 'error' : 'active',
-          provider_resource_id: null,
-          last_error:           provErr,
-          provisioned_at:       null,
-          created_at:           new Date().toISOString(),
-          updated_at:           new Date().toISOString(),
-        })
-        // Modal closes (via onSaved → setAssignment(null)) either way.
-        // Errors remain visible on the row as a red status badge + last_error.
+      } catch {
+        provErr = 'Provisioning request failed.'
       }
+
+      const r = await fetch(`/api/admin/sites/${site.id}/integrations`)
+      const d = await r.json().catch(() => ({})) as { links?: SiteIntegrationListItem[] }
+      const fresh = (d.links ?? []).find(l => l.id === newLinkId)
+
+      onSaved(fresh ?? {
+        id:                   newLinkId,
+        site_id:              site.id,
+        integration_id:       integration.id,
+        integration_key:      integration.key,
+        integration_name:     integration.name,
+        integration_icon:     integration.icon,
+        integration_provider: integration.provider,
+        config,
+        status:               provErr ? 'error' : 'active',
+        provider_resource_id: null,
+        provider_metadata:    null,
+        last_error:           provErr,
+        provisioned_at:       null,
+        created_at:           new Date().toISOString(),
+        updated_at:           new Date().toISOString(),
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed.')
     } finally {
@@ -837,14 +809,14 @@ function ServiceAssignmentModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-navy-950/50 backdrop-blur-sm" onClick={() => !saving && onClose()} />
-      <div className="relative flex w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-navy-100 bg-white shadow-2xl" style={{ maxHeight: '90vh' }}>
+      <div className="relative flex w-full max-w-md flex-col overflow-hidden rounded-3xl border border-navy-100 bg-white shadow-2xl" style={{ maxHeight: '90vh' }}>
         <div className="flex items-start justify-between border-b border-navy-100 px-6 py-5">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-700">
-              {service.name}
+              {integration.name}
             </p>
             <h3 className="mt-1 text-lg font-bold text-navy-900">
-              {existing ? 'Edit' : 'Connect'} service<span className="text-brand-500">.</span>
+              {existing ? 'Edit' : 'Add'} integration<span className="text-brand-500">.</span>
             </h3>
             <p className="mt-0.5 truncate text-xs text-navy-500">
               for <span className="text-navy-700">{site.display_name?.trim() || site.domain}</span>
@@ -861,87 +833,87 @@ function ServiceAssignmentModal({
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
-          {service.auth_options.length === 0 ? (
-            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-800">
-              This service has no auth methods configured. Define one in{' '}
-              <a href={`/admin/services/${service.id}`} className="font-semibold underline-offset-2 hover:underline">
-                Services
-              </a>{' '}
-              first.
+          {/* Per-integration body */}
+          {integration.key === 'uptime' || integration.key === 'ssl' ? (
+            <p className="rounded-xl border border-navy-100 bg-navy-50/40 px-3 py-3 text-xs text-navy-600">
+              No configuration needed — the monitor will use{' '}
+              <code className="text-navy-800">{site.domain}</code> automatically.
             </p>
-          ) : (
+          ) : integration.key === 'analytics' ? (
             <>
-              {/* Auth-method picker (or read-only label when editing) */}
-              {lockedOption ? (
-                <div className="rounded-xl border border-navy-100 bg-navy-50/40 px-3 py-2.5">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-navy-500">
-                    Connection method
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-navy-900">
-                    {lockedOption.label}
-                  </p>
-                  {lockedOption.description && (
-                    <p className="mt-0.5 text-[11px] text-navy-600">{lockedOption.description}</p>
-                  )}
-                  <p className="mt-1.5 text-[10px] text-navy-400">
-                    Auth method is locked once a service is connected. Remove and re-add to switch.
-                  </p>
-                </div>
-              ) : service.auth_options.length === 1 ? null : (
-                <div className="space-y-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-navy-500">
-                    Choose a connection method
-                  </p>
-                  <div className="space-y-1.5">
-                    {[...service.auth_options]
-                      .sort((a, b) => a.sort_order - b.sort_order)
-                      .map(opt => {
-                        const checked = opt.id === optionId
-                        return (
-                          <label
-                            key={opt.id}
-                            className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5 transition ${
-                              checked
-                                ? 'border-brand-300 bg-brand-50 ring-1 ring-brand-200'
-                                : 'border-navy-100 bg-white hover:border-brand-200 hover:bg-brand-50/40'
-                            }`}
-                          >
-                            <input
-                              type="radio"
-                              name="auth-option"
-                              checked={checked}
-                              onChange={() => setOptionId(opt.id)}
-                              className="mt-0.5 h-3.5 w-3.5 text-brand-600 focus:ring-brand-500"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                <p className="text-xs font-semibold text-navy-900">{opt.label}</p>
-                                {opt.is_default && (
-                                  <span className="rounded-full bg-brand-100 px-1.5 py-0.5 text-[9px] font-semibold text-brand-800">
-                                    default
-                                  </span>
-                                )}
-                              </div>
-                              {opt.description && (
-                                <p className="mt-0.5 text-[11px] text-navy-600">{opt.description}</p>
-                              )}
-                            </div>
-                            {checked && <CheckCircle2 className="h-4 w-4 text-brand-600" />}
-                          </label>
-                        )
-                      })}
-                  </div>
-                </div>
-              )}
-
-              {/* Dynamic form */}
-              <div className="border-t border-navy-100 pt-4">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-navy-500">
-                  Settings
+              <div className="space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-navy-500">
+                  Provider
                 </p>
-                <DataForm schema={schema} values={values} onChange={setValues} />
+                <div className="grid grid-cols-2 gap-2">
+                  {(['ga4', 'plausible'] as const).map(p => {
+                    const label = p === 'ga4' ? 'Google Analytics 4' : 'Plausible Analytics'
+                    const checked = analyticsProvider === p
+                    return (
+                      <label
+                        key={p}
+                        className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 transition ${
+                          checked
+                            ? 'border-brand-300 bg-brand-50 ring-1 ring-brand-200'
+                            : 'border-navy-100 bg-white hover:border-brand-200 hover:bg-brand-50/40'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="analytics-provider"
+                          checked={checked}
+                          onChange={() => setAnalyticsProvider(p)}
+                          className="h-3.5 w-3.5 text-brand-600 focus:ring-brand-500"
+                        />
+                        <span className="flex-1 text-xs font-semibold text-navy-900">{label}</span>
+                        {checked && <CheckCircle2 className="h-3.5 w-3.5 text-brand-600" />}
+                      </label>
+                    )
+                  })}
+                </div>
               </div>
+
+              {analyticsProvider === 'ga4' ? (
+                <Field label="Measurement ID" required>
+                  <input
+                    type="text"
+                    required
+                    value={propertyId}
+                    onChange={e => setPropertyId(e.target.value)}
+                    placeholder="G-XXXXXXXXXX"
+                    className="input font-mono text-sm"
+                  />
+                </Field>
+              ) : (
+                <Field label="Domain" required hint="As registered in your Plausible account.">
+                  <input
+                    type="text"
+                    required
+                    value={plausibleDomain}
+                    onChange={e => setPlausibleDomain(e.target.value)}
+                    placeholder="yourdomain.com"
+                    className="input font-mono text-sm"
+                  />
+                </Field>
+              )}
             </>
+          ) : integration.key === 'whats_on' ? (
+            <Field
+              label="Buffer organisation ID"
+              hint="Leave blank if you only have one Buffer organisation."
+            >
+              <input
+                type="text"
+                value={organizationId}
+                onChange={e => setOrganizationId(e.target.value)}
+                placeholder="optional"
+                className="input font-mono text-sm"
+              />
+            </Field>
+          ) : (
+            <p className="rounded-xl border border-navy-100 bg-navy-50/40 px-3 py-3 text-xs text-navy-600">
+              No configuration needed for this integration.
+            </p>
           )}
 
           {error && (
@@ -953,10 +925,10 @@ function ServiceAssignmentModal({
 
         <div className="flex items-center justify-between gap-2 border-t border-navy-100 bg-navy-50/40 px-6 py-3">
           <p className="text-[10px] text-navy-500">
-            {service.provisioning_required ? (
-              <>Status will start as <strong>pending</strong>.</>
+            {integration.provisioning_required ? (
+              <>External resource will be created.</>
             ) : (
-              <>Status will be set to <strong>active</strong>.</>
+              <>Will be marked <strong>active</strong> immediately.</>
             )}
           </p>
           <div className="flex items-center gap-2">
@@ -971,16 +943,56 @@ function ServiceAssignmentModal({
             <button
               type="button"
               onClick={handleSubmit as unknown as React.MouseEventHandler<HTMLButtonElement>}
-              disabled={saving || service.auth_options.length === 0}
+              disabled={saving}
               className="inline-flex items-center gap-2 rounded-full bg-navy-900 px-4 py-2 text-xs font-semibold text-white shadow-soft transition hover:bg-navy-800 disabled:opacity-60"
             >
               {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-              {existing ? 'Save changes' : 'Connect'}
-              {!saving && !existing && <ChevronRight className="h-3 w-3" />}
+              {existing ? 'Save changes' : 'Add & provision'}
             </button>
           </div>
         </div>
+
+        <style jsx>{`
+          .input {
+            width: 100%;
+            border-radius: 0.75rem;
+            border: 1px solid #dde7f2;
+            background: #fff;
+            padding: 0.625rem 0.875rem;
+            font-size: 0.875rem;
+            color: #0b2545;
+          }
+          .input::placeholder { color: #94a8c0; }
+          .input:focus {
+            outline: none;
+            border-color: #7ca653;
+            box-shadow: 0 0 0 3px rgba(124, 166, 83, 0.15);
+          }
+        `}</style>
       </div>
     </div>
+  )
+}
+
+function Field({
+  label,
+  required,
+  hint,
+  children,
+}: {
+  label:     string
+  required?: boolean
+  hint?:     string
+  children:  React.ReactNode
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-navy-500">
+        {label}
+        {required && <span className="ml-1 text-brand-600">*</span>}
+      </span>
+      {children}
+      {hint && <span className="mt-1 block text-[10px] text-navy-400">{hint}</span>}
+    </label>
   )
 }

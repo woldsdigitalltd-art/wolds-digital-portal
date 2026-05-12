@@ -4,17 +4,18 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, Plus, X } from 'lucide-react'
 
-export default function NewServiceButton() {
-  const [open, setOpen]     = useState(false)
-  const [name, setName]     = useState('')
-  const [key, setKey]       = useState('')
-  const [desc, setDesc]     = useState('')
-  const [icon, setIcon]     = useState('Boxes')
-  const [provider, setProvider]                       = useState('')
+export default function NewIntegrationButton() {
+  const [open, setOpen]         = useState(false)
+  const [name, setName]         = useState('')
+  const [key, setKey]           = useState('')
+  const [desc, setDesc]         = useState('')
+  const [icon, setIcon]         = useState('Boxes')
+  const [provider, setProvider] = useState('')
+  const [providerUrl, setProviderUrl] = useState('')
   const [provisioningRequired, setProvisioningRequired] = useState(false)
-  const [embedEnabled, setEmbedEnabled]               = useState(false)
-  const [loading, setLoad]  = useState(false)
-  const [error, setError]   = useState<string | null>(null)
+  const [embedEnabled, setEmbedEnabled] = useState(false)
+  const [loading, setLoad]      = useState(false)
+  const [error, setError]       = useState<string | null>(null)
 
   const router = useRouter()
   const firstRef = useRef<HTMLInputElement>(null)
@@ -25,6 +26,7 @@ export default function NewServiceButton() {
     setDesc('')
     setIcon('Boxes')
     setProvider('')
+    setProviderUrl('')
     setProvisioningRequired(false)
     setEmbedEnabled(false)
     setError(null)
@@ -44,14 +46,13 @@ export default function NewServiceButton() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  // Slugify name into key while user hasn't manually edited the key field.
   const [keyTouched, setKeyTouched] = useState(false)
   useEffect(() => {
     if (keyTouched) return
     const slug = name
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
       .slice(0, 63)
     setKey(slug)
   }, [name, keyTouched])
@@ -61,15 +62,16 @@ export default function NewServiceButton() {
     setLoad(true)
     setError(null)
     try {
-      const res = await fetch('/api/admin/services', {
+      const res = await fetch('/api/admin/integrations', {
         method:  'POST',
         headers: { 'content-type': 'application/json' },
         body:    JSON.stringify({
           name,
           key,
-          description: desc,
+          description:           desc,
           icon,
           provider:              provider.trim() || null,
+          provider_url:          providerUrl.trim() || null,
           provisioning_required: provisioningRequired,
           embed_enabled:         embedEnabled,
         }),
@@ -79,7 +81,7 @@ export default function NewServiceButton() {
         setError(data.error ?? 'Something went wrong. Please try again.')
         return
       }
-      router.push(`/admin/services/${data.id}`)
+      router.push(`/admin/integrations/${data.id}`)
     } catch {
       setError('Network error. Please try again.')
     } finally {
@@ -94,7 +96,7 @@ export default function NewServiceButton() {
         className="inline-flex items-center gap-2 rounded-full bg-navy-900 px-4 py-2 text-xs font-semibold text-white shadow-soft transition hover:bg-navy-800"
       >
         <Plus className="h-3.5 w-3.5" />
-        New service
+        New integration
       </button>
 
       {open && (
@@ -107,10 +109,10 @@ export default function NewServiceButton() {
                   Admin
                 </p>
                 <h2 className="mt-1 text-lg font-bold text-navy-900">
-                  New service<span className="text-brand-500">.</span>
+                  New integration<span className="text-brand-500">.</span>
                 </h2>
                 <p className="mt-1 text-xs text-navy-500">
-                  Schemas and global values are configured on the next screen.
+                  Credentials are set directly in Supabase — none of that lives in the UI.
                 </p>
               </div>
               <button
@@ -132,12 +134,12 @@ export default function NewServiceButton() {
                   autoComplete="off"
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  placeholder="Google Analytics"
+                  placeholder="Uptime Monitoring"
                   className="input"
                 />
               </Field>
 
-              <Field label="Key" required hint="Lowercase identifier. Used internally and in API URLs.">
+              <Field label="Key" required hint="Lowercase identifier used in code & URLs.">
                 <input
                   type="text"
                   required
@@ -145,7 +147,7 @@ export default function NewServiceButton() {
                   autoComplete="off"
                   value={key}
                   onChange={e => { setKey(e.target.value); setKeyTouched(true) }}
-                  placeholder="google-analytics"
+                  placeholder="uptime"
                   className="input font-mono text-sm"
                 />
               </Field>
@@ -155,29 +157,41 @@ export default function NewServiceButton() {
                   value={desc}
                   onChange={e => setDesc(e.target.value)}
                   rows={2}
-                  placeholder="A one-line summary shown on the customer's portal."
+                  placeholder="Live availability monitoring via Better Stack."
                   className="input resize-none"
                 />
               </Field>
 
-              <Field label="Icon" hint="lucide-react icon name. Examples: BarChart3, Activity, Mail, Shield, Server.">
-                <input
-                  type="text"
-                  autoComplete="off"
-                  value={icon}
-                  onChange={e => setIcon(e.target.value)}
-                  placeholder="Boxes"
-                  className="input font-mono text-sm"
-                />
-              </Field>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <Field label="Icon" hint="lucide-react icon name.">
+                  <input
+                    type="text"
+                    autoComplete="off"
+                    value={icon}
+                    onChange={e => setIcon(e.target.value)}
+                    placeholder="Activity"
+                    className="input font-mono text-sm"
+                  />
+                </Field>
+                <Field label="Provider" hint="Free-form vendor label.">
+                  <input
+                    type="text"
+                    autoComplete="off"
+                    value={provider}
+                    onChange={e => setProvider(e.target.value)}
+                    placeholder="betterstack"
+                    className="input"
+                  />
+                </Field>
+              </div>
 
-              <Field label="Provider" hint="External provider name, e.g. Better Stack, Google, Buffer. Free text.">
+              <Field label="Provider dashboard URL" hint="Where to send admins for vendor controls.">
                 <input
-                  type="text"
+                  type="url"
                   autoComplete="off"
-                  value={provider}
-                  onChange={e => setProvider(e.target.value)}
-                  placeholder="Better Stack"
+                  value={providerUrl}
+                  onChange={e => setProviderUrl(e.target.value)}
+                  placeholder="https://uptime.betterstack.com/"
                   className="input"
                 />
               </Field>
@@ -224,7 +238,7 @@ export default function NewServiceButton() {
                   className="inline-flex items-center gap-2 rounded-full bg-navy-900 px-4 py-2 text-xs font-semibold text-white shadow-soft transition hover:bg-navy-800 disabled:opacity-60"
                 >
                   {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  {loading ? 'Creating…' : 'Create & configure'}
+                  {loading ? 'Creating…' : 'Create'}
                 </button>
               </div>
             </form>

@@ -6,10 +6,13 @@ import {
   Clock,
   ExternalLink,
   Globe,
+  Megaphone,
+  ShieldCheck,
   XCircle,
+  Zap,
 } from 'lucide-react'
 
-interface WebsiteService {
+interface WebsiteIntegration {
   id:          string
   key:         string
   name:        string
@@ -17,23 +20,26 @@ interface WebsiteService {
   description: string | null
 }
 
+interface UptimeSnapshot {
+  status?:            'up' | 'down' | 'paused' | string | null
+  uptime_percentage?: number | string | null
+  last_checked_at?:   string | null
+}
+
 interface Website {
-  id:                       string
-  domain:                   string
-  display_name:             string | null
-  services:                 WebsiteService[]
-  uptime_status?:           string | null
-  uptime_percentage?:       number | string | null
-  uptime_last_checked_at?:  string | null
+  id:           string
+  domain:       string
+  display_name: string | null
+  integrations: WebsiteIntegration[]
+  uptime:       UptimeSnapshot | null
 }
 
 export default async function WebsitesPage() {
   const supabase = await createClient()
 
-  // Prefer the new dedicated RPC. It returns service flags + the most
-  // recent uptime sample joined in. If the migration that adds it
-  // hasn't run yet, fall back to an empty list so the page still
-  // renders rather than 500-ing.
+  // get_my_websites returns each site with its active integrations and,
+  // when an uptime integration is attached, the latest live snapshot
+  // from `site_integrations.provider_metadata`.
   const { data, error } = await supabase.rpc('get_my_websites')
   if (error) {
     console.error('get_my_websites failed:', error)
@@ -50,7 +56,7 @@ export default async function WebsitesPage() {
           Websites<span className="text-brand-500">.</span>
         </h1>
         <p className="mt-2 text-sm text-navy-600 md:text-base">
-          Every site we&apos;re looking after for you, with the services we&apos;ve enabled
+          Every site we&apos;re looking after for you, with the integrations we&apos;ve enabled
           and the latest availability check at a glance.
         </p>
       </div>
@@ -75,24 +81,22 @@ export default async function WebsitesPage() {
 }
 
 function WebsiteRow({ site }: { site: Website }) {
-  const uptimeAttached = site.services.some(s => s.key === 'uptime')
-  const status = (site.uptime_status ?? (uptimeAttached ? 'unknown' : null)) as
-    | 'up'
-    | 'down'
-    | 'paused'
-    | 'unknown'
-    | null
+  const integrations    = site.integrations ?? []
+  const uptimeAttached  = integrations.some(s => s.key === 'uptime')
+  const uptimeSnapshot  = site.uptime ?? null
+
+  const status = (uptimeSnapshot?.status ?? (uptimeAttached ? 'unknown' : null)) as
+    | 'up' | 'down' | 'paused' | 'unknown' | null
 
   const pct =
-    typeof site.uptime_percentage === 'string'
-      ? Number.parseFloat(site.uptime_percentage)
-      : site.uptime_percentage ?? null
+    typeof uptimeSnapshot?.uptime_percentage === 'string'
+      ? Number.parseFloat(uptimeSnapshot.uptime_percentage)
+      : (uptimeSnapshot?.uptime_percentage as number | null | undefined) ?? null
 
   const display = site.display_name?.trim() || site.domain
 
   return (
     <li className="flex flex-col gap-4 px-5 py-4 transition hover:bg-white/40 md:flex-row md:items-center md:justify-between md:gap-6">
-      {/* Left: identity + meta */}
       <div className="flex min-w-0 items-start gap-4">
         <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700 ring-1 ring-brand-100">
           <Globe className="h-5 w-5" />
@@ -109,22 +113,20 @@ function WebsiteRow({ site }: { site: Website }) {
             <ExternalLink className="h-3 w-3" />
           </a>
 
-          {/* Active services */}
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            {site.services.length === 0 ? (
+            {integrations.length === 0 ? (
               <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-navy-200 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-navy-500">
-                No services enabled
+                No integrations enabled
               </span>
             ) : (
-              site.services.map(svc => (
-                <ServiceBadge key={svc.id} iconName={svc.icon} label={svc.name} />
+              integrations.map(i => (
+                <IntegrationBadge key={i.id} iconName={i.icon} label={i.name} />
               ))
             )}
           </div>
         </div>
       </div>
 
-      {/* Right: status + uptime stat */}
       <div className="flex shrink-0 items-center gap-3 md:flex-col md:items-end md:gap-1.5">
         <StatusPill status={status} />
         {uptimeAttached && (
@@ -132,9 +134,9 @@ function WebsiteRow({ site }: { site: Website }) {
             {pct !== null && !Number.isNaN(pct)
               ? <><strong className="text-navy-700">{pct.toFixed(2)}%</strong> uptime</>
               : 'Awaiting first check'}
-            {site.uptime_last_checked_at && (
+            {uptimeSnapshot?.last_checked_at && (
               <span className="ml-1 text-navy-400">
-                · {formatRelative(site.uptime_last_checked_at)}
+                · {formatRelative(uptimeSnapshot.last_checked_at)}
               </span>
             )}
           </p>
@@ -145,20 +147,15 @@ function WebsiteRow({ site }: { site: Website }) {
 }
 
 const ICON_MAP: Record<string, React.ElementType> = {
-  BarChart3,
-  Activity,
-  Globe,
-  Clock,
-  CheckCircle,
-  XCircle,
+  Activity, BarChart3, CheckCircle, Clock, Globe, Megaphone, ShieldCheck, XCircle, Zap,
 }
 
-function ServiceBadge({
+function IntegrationBadge({
   iconName,
   label,
 }: {
   iconName: string | null
-  label: string
+  label:    string
 }) {
   const Icon = (iconName && ICON_MAP[iconName]) || Globe
   return (

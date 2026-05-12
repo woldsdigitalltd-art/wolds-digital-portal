@@ -1,19 +1,25 @@
 import { createClient } from '@/lib/supabase/server'
-import { BarChart3 } from 'lucide-react'
+import { BarChart3, ExternalLink } from 'lucide-react'
 
-interface WebsiteService {
+interface WebsiteIntegration {
   id:          string
   key:         string
   name:        string
   icon:        string | null
   description: string | null
+  config?:     Record<string, unknown> | null
 }
 
 interface Website {
   id:           string
   domain:       string
   display_name: string | null
-  services:     WebsiteService[]
+  integrations: WebsiteIntegration[]
+}
+
+interface AnalyticsAttachment {
+  site:        Website
+  integration: WebsiteIntegration
 }
 
 export default async function AnalyticsPage() {
@@ -22,8 +28,13 @@ export default async function AnalyticsPage() {
   if (error) {
     console.error('get_my_websites failed (analytics page):', error)
   }
-  const sites    = (data ?? []) as Website[]
-  const withAnalytics = sites.filter(s => s.services.some(svc => svc.key === 'analytics'))
+  const sites = (data ?? []) as Website[]
+
+  const attachments: AnalyticsAttachment[] = []
+  for (const site of sites) {
+    const ai = (site.integrations ?? []).find(i => i.key === 'analytics')
+    if (ai) attachments.push({ site, integration: ai })
+  }
 
   return (
     <div>
@@ -35,46 +46,72 @@ export default async function AnalyticsPage() {
           Traffic insights<span className="text-brand-500">.</span>
         </h1>
         <p className="mt-2 text-sm text-navy-600">
-          {withAnalytics.length === 0
+          {attachments.length === 0
             ? 'Analytics haven\u2019t been configured for any of your sites yet.'
             : 'Analytics are configured for the sites listed below.'}
         </p>
       </div>
 
-      {withAnalytics.length === 0 ? (
+      {attachments.length === 0 ? (
         <EmptyState />
       ) : (
         <ul className="space-y-3">
-          {withAnalytics.map(site => (
-            <li
-              key={site.id}
-              className="overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-soft"
-            >
-              <div className="flex items-center justify-between gap-3 border-b border-navy-100 px-6 py-4">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-navy-900">
-                    {site.display_name?.trim() || site.domain}
-                  </p>
-                  {site.display_name?.trim() && (
-                    <p className="truncate text-xs text-navy-500">{site.domain}</p>
-                  )}
-                </div>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-100 bg-brand-50 px-2.5 py-1 text-[11px] font-semibold text-brand-700">
-                  <BarChart3 className="h-3 w-3" />
-                  Configured
-                </span>
-              </div>
-              <div className="p-8 text-center">
-                <p className="text-sm text-navy-600">
-                  Embedded reporting is on its way. We&apos;ll surface your traffic data
-                  here as soon as the dashboard is built.
-                </p>
-              </div>
-            </li>
+          {attachments.map(({ site, integration }) => (
+            <AnalyticsCard key={site.id} site={site} integration={integration} />
           ))}
         </ul>
       )}
     </div>
+  )
+}
+
+function AnalyticsCard({
+  site,
+  integration,
+}: {
+  site:        Website
+  integration: WebsiteIntegration
+}) {
+  const cfg     = (integration.config ?? {}) as Record<string, unknown>
+  const provider = (cfg.provider as string | undefined) ?? null
+
+  return (
+    <li className="overflow-hidden rounded-2xl border border-navy-100 bg-white shadow-soft">
+      <div className="flex items-center justify-between gap-3 border-b border-navy-100 px-6 py-4">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold text-navy-900">
+            {site.display_name?.trim() || site.domain}
+          </p>
+          {site.display_name?.trim() && (
+            <p className="truncate text-xs text-navy-500">{site.domain}</p>
+          )}
+        </div>
+        {provider && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-brand-100 bg-brand-50 px-2.5 py-1 text-[11px] font-semibold text-brand-700">
+            <BarChart3 className="h-3 w-3" />
+            {provider === 'ga4' ? 'Google Analytics 4' : 'Plausible Analytics'}
+          </span>
+        )}
+      </div>
+      <div className="p-8 text-center">
+        {provider === 'plausible' && typeof cfg.domain === 'string' ? (
+          <a
+            href={`https://plausible.io/${cfg.domain}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:text-brand-800"
+          >
+            Open Plausible dashboard
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        ) : (
+          <p className="text-sm text-navy-600">
+            Embedded reporting is on its way. We&apos;ll surface your traffic data
+            here as soon as the dashboard is built.
+          </p>
+        )}
+      </div>
+    </li>
   )
 }
 

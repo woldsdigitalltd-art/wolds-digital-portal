@@ -10,136 +10,130 @@ import {
 /**
  * Provisioning orchestrator.
  *
- * Routes a `site_services` row to the right external provider based
- * on its `service.key`, and keeps the row's `status` /
- * `provider_resource_id` / `last_error` columns in sync.
+ * Routes a `site_integrations` row to the right external provider
+ * based on its `integration.key`, and keeps the row's lifecycle
+ * columns (`status`, `provider_resource_id`, `provider_metadata`,
+ * `last_error`, `provisioned_at`) in sync.
  *
  * Reads platform-level credentials (e.g. our own Better Stack API
- * key) from `services.global_settings_data`, which is only readable
- * via the service role — never via the normal user session.
+ * key) from `integrations.credentials`, which is only readable via
+ * the service role — never via a normal user session.
  */
 
 export type ProvisionResult =
-  | { status: 'active'; provider_resource_id: string; metadata: Record<string, unknown> }
+  | { status: 'active'; provider_resource_id: string;  metadata: Record<string, unknown> }
   | { status: 'active'; provider_resource_id: null }
 
 interface JoinedSite { domain: string; display_name: string | null }
-interface JoinedService {
-  key:                     string
-  provisioning_required:   boolean
-  global_settings_data:    Record<string, unknown> | null
+interface JoinedIntegration {
+  key:                   string
+  provisioning_required: boolean
+  credentials:           Record<string, unknown> | null
 }
 
 /* ──────────────────────────────────────────── provision ─────────────────────────────── */
 
-export async function provisionSiteService(
-  siteServiceId: string,
+export async function provisionSiteIntegration(
+  siteIntegrationId: string,
 ): Promise<ProvisionResult> {
   const supabase = createServiceRoleClient()
 
-  const { data: ss, error } = await supabase
-    .from('site_services')
+  const { data: si, error } = await supabase
+    .from('site_integrations')
     .select(`
       id,
-      credentials,
+      config,
       status,
-      service:services (
+      integration:integrations (
         key,
         provisioning_required,
-        global_settings_data
+        credentials
       ),
       site:sites (
         domain,
         display_name
-      ),
-      auth_type:service_auth_types (
-        auth_type,
-        label
       )
     `)
-    .eq('id', siteServiceId)
+    .eq('id', siteIntegrationId)
     .single()
 
-  if (error || !ss) {
-    throw new Error(`site_service not found: ${siteServiceId}`)
+  if (error || !si) {
+    throw new Error(`site_integration not found: ${siteIntegrationId}`)
   }
 
-  const service = ss.service  as unknown as JoinedService | null
-  const site    = ss.site     as unknown as JoinedSite    | null
-  const creds   = (ss.credentials ?? {}) as Record<string, unknown>
+  const integration = si.integration as unknown as JoinedIntegration | null
+  const site        = si.site        as unknown as JoinedSite | null
+  const config      = (si.config ?? {}) as Record<string, unknown>
 
-  if (!service) throw new Error('site_service is not linked to a service row.')
-  if (!site)    throw new Error('site_service is not linked to a site.')
+  if (!integration) throw new Error('site_integration is not linked to an integration row.')
+  if (!site)        throw new Error('site_integration is not linked to a site.')
 
-  // Non-provisioning services (analytics, whats_on manual etc.) → mark active.
-  if (!service.provisioning_required) {
+  // Non-provisioning integrations (analytics, whats_on) → mark active.
+  if (!integration.provisioning_required) {
     await supabase
-      .from('site_services')
+      .from('site_integrations')
       .update({
         status:         'active',
         provisioned_at: new Date().toISOString(),
         last_error:     null,
       })
-      .eq('id', siteServiceId)
+      .eq('id', siteIntegrationId)
 
     return { status: 'active', provider_resource_id: null }
   }
 
-  // Optimistic mid-flight status so the UI can show "provisioning".
+  // Mid-flight status so the UI can show "provisioning…".
   await supabase
-    .from('site_services')
+    .from('site_integrations')
     .update({ status: 'provisioning' })
-    .eq('id', siteServiceId)
+    .eq('id', siteIntegrationId)
 
   try {
-    const globalSettings = (service.global_settings_data ?? {}) as Record<string, unknown>
+    const platformCreds = (integration.credentials ?? {}) as Record<string, unknown>
     let result: { monitor_id: string; metadata: Record<string, unknown> }
 
-    switch (service.key) {
+    switch (integration.key) {
       case 'uptime': {
-        const apiKey = globalSettings.api_key as string | undefined
+        const apiKey = platformCreds.api_key as string | undefined
         if (!apiKey) {
-          throw new Error('Better Stack API key not configured in service global settings.')
+          throw new Error('Better Stack API key not configured on the integration row.')
         }
-        const url = creds.url as string | undefined
-        if (!url) throw new Error('URL to monitor is required in credentials.')
+        const url = `https://${site.domain}`
 
         result = await provisionUptimeMonitor({
           apiKey,
           url,
           name:           site.display_name?.trim() || site.domain,
-          checkFrequency: Number(creds.check_frequency ?? 60),
-          alertEmail:     (creds.alert_email as string | undefined) ?? undefined,
+          checkFrequency: Number(config.check_frequency ?? 60),
+          alertEmail:     (config.alert_email as string | undefined) ?? undefined,
         })
         break
       }
 
       case 'ssl': {
-        const apiKey = globalSettings.api_key as string | undefined
+        const apiKey = platformCreds.api_key as string | undefined
         if (!apiKey) {
-          throw new Error('Better Stack API key not configured in service global settings.')
+          throw new Error('Better Stack API key not configured on the integration row.')
         }
-        const domain = (creds.domain as string | undefined) ?? site.domain
-        if (!domain) throw new Error('Domain is required for SSL monitoring.')
 
         result = await provisionSSLMonitor({
           apiKey,
-          domain,
+          domain:          site.domain,
           name:            site.display_name?.trim() || site.domain,
-          alertDaysBefore: Number(creds.alert_days_before ?? 30),
+          alertDaysBefore: Number(config.alert_days_before ?? 30),
         })
         break
       }
 
       default:
         throw new Error(
-          `No provisioner implemented for service key "${service.key}". ` +
+          `No provisioner implemented for integration key "${integration.key}". ` +
           `Add a case to lib/provisioning/index.ts.`,
         )
     }
 
     await supabase
-      .from('site_services')
+      .from('site_integrations')
       .update({
         status:               'active',
         provider_resource_id: result.monitor_id,
@@ -147,7 +141,7 @@ export async function provisionSiteService(
         provisioned_at:       new Date().toISOString(),
         last_error:           null,
       })
-      .eq('id', siteServiceId)
+      .eq('id', siteIntegrationId)
 
     return {
       status:               'active',
@@ -157,54 +151,53 @@ export async function provisionSiteService(
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     await supabase
-      .from('site_services')
+      .from('site_integrations')
       .update({
         status:     'error',
         last_error: message,
       })
-      .eq('id', siteServiceId)
+      .eq('id', siteIntegrationId)
     throw err
   }
 }
 
 /* ─────────────────────────────────────────── deprovision ────────────────────────────── */
 
-export async function deprovisionSiteService(siteServiceId: string): Promise<void> {
+export async function deprovisionSiteIntegration(siteIntegrationId: string): Promise<void> {
   const supabase = createServiceRoleClient()
 
-  const { data: ss, error } = await supabase
-    .from('site_services')
+  const { data: si, error } = await supabase
+    .from('site_integrations')
     .select(`
       id,
       provider_resource_id,
-      service:services (
+      integration:integrations (
         key,
-        global_settings_data
+        credentials
       )
     `)
-    .eq('id', siteServiceId)
+    .eq('id', siteIntegrationId)
     .single()
 
-  if (error || !ss) throw new Error(`site_service not found: ${siteServiceId}`)
+  if (error || !si) throw new Error(`site_integration not found: ${siteIntegrationId}`)
 
-  const service = ss.service as unknown as JoinedService | null
-  if (!service) throw new Error('site_service is not linked to a service row.')
+  const integration = si.integration as unknown as JoinedIntegration | null
+  if (!integration) throw new Error('site_integration is not linked to an integration row.')
 
-  const globalSettings = (service.global_settings_data ?? {}) as Record<string, unknown>
-  const apiKey         = globalSettings.api_key as string | undefined
-  const providerResId  = ss.provider_resource_id as string | null
+  const platformCreds = (integration.credentials ?? {}) as Record<string, unknown>
+  const apiKey        = platformCreds.api_key as string | undefined
+  const providerResId = si.provider_resource_id as string | null
 
-  // Nothing external to remove — just mark cancelled.
   if (!providerResId) {
     await supabase
-      .from('site_services')
+      .from('site_integrations')
       .update({ status: 'cancelled', last_error: null })
-      .eq('id', siteServiceId)
+      .eq('id', siteIntegrationId)
     return
   }
 
   try {
-    switch (service.key) {
+    switch (integration.key) {
       case 'uptime':
         if (!apiKey) throw new Error('Better Stack API key not configured.')
         await deprovisionUptimeMonitor({ apiKey, monitorId: providerResId })
@@ -219,18 +212,18 @@ export async function deprovisionSiteService(siteServiceId: string): Promise<voi
     }
 
     await supabase
-      .from('site_services')
+      .from('site_integrations')
       .update({ status: 'cancelled', last_error: null })
-      .eq('id', siteServiceId)
+      .eq('id', siteIntegrationId)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     await supabase
-      .from('site_services')
+      .from('site_integrations')
       .update({
         status:     'error',
         last_error: `Deprovision failed: ${message}`,
       })
-      .eq('id', siteServiceId)
+      .eq('id', siteIntegrationId)
     throw err
   }
 }
