@@ -48,12 +48,49 @@ export async function POST(request: Request) {
   }
   const redirectTo = `${siteUrl.replace(/\/$/, '')}/auth/callback`
 
-  // Generate the magic link via the Supabase admin client. This does NOT
-  // trigger Supabase's own email sending — it just returns the link, which
-  // we then deliver via Brevo.
+  const admin = createAdminClient()
+
+  // 1. Confirm the email is actually registered before generating anything.
+  //    Without this, generateLink({ type: 'magiclink' }) would silently
+  //    create a new account.
+  try {
+    const { data: existingUser, error: lookupError } = await admin
+      .schema('auth')
+      .from('users')
+      .select('id')
+      .ilike('email', email)
+      .maybeSingle()
+
+    if (lookupError) {
+      console.error('User lookup failed:', lookupError)
+      return NextResponse.json(
+        { error: 'Unable to verify your account right now. Please try again.' },
+        { status: 500 }
+      )
+    }
+
+    if (!existingUser) {
+      return NextResponse.json(
+        {
+          error:
+            "We couldn't find an account for that email. Please contact your account manager to be invited.",
+        },
+        { status: 404 }
+      )
+    }
+  } catch (err) {
+    console.error('User lookup threw:', err)
+    return NextResponse.json(
+      { error: 'Unable to verify your account right now. Please try again.' },
+      { status: 500 }
+    )
+  }
+
+  // 2. Generate the magic link via the Supabase admin client. This does NOT
+  //    trigger Supabase's own email sending — it just returns the link,
+  //    which we then deliver via Brevo.
   let magicLink: string
   try {
-    const admin = createAdminClient()
     const { data, error } = await admin.auth.admin.generateLink({
       type: 'magiclink',
       email,
@@ -62,8 +99,10 @@ export async function POST(request: Request) {
 
     if (error || !data?.properties?.action_link) {
       console.error('Supabase generateLink failed:', error)
-      // Return a generic message so we don't leak whether the email is known.
-      return NextResponse.json({ ok: true })
+      return NextResponse.json(
+        { error: 'Unable to generate sign-in link. Please try again.' },
+        { status: 500 }
+      )
     }
 
     magicLink = data.properties.action_link
