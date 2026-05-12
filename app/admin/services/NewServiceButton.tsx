@@ -10,6 +10,9 @@ export default function NewServiceButton() {
   const [key, setKey]       = useState('')
   const [desc, setDesc]     = useState('')
   const [icon, setIcon]     = useState('Boxes')
+  const [provider, setProvider]                       = useState('')
+  const [provisioningRequired, setProvisioningRequired] = useState(false)
+  const [embedEnabled, setEmbedEnabled]               = useState(false)
   const [loading, setLoad]  = useState(false)
   const [error, setError]   = useState<string | null>(null)
 
@@ -21,6 +24,9 @@ export default function NewServiceButton() {
     setKey('')
     setDesc('')
     setIcon('Boxes')
+    setProvider('')
+    setProvisioningRequired(false)
+    setEmbedEnabled(false)
     setError(null)
   }
   function close() {
@@ -63,6 +69,9 @@ export default function NewServiceButton() {
           key,
           description: desc,
           icon,
+          provider:              provider.trim() || null,
+          provisioning_required: provisioningRequired,
+          embed_enabled:         embedEnabled,
         }),
       })
       const data = (await res.json().catch(() => ({}))) as { id?: string; error?: string }
@@ -161,6 +170,38 @@ export default function NewServiceButton() {
                   className="input font-mono text-sm"
                 />
               </Field>
+
+              <Field label="Provider" hint="External provider name, e.g. Better Stack, Google, Buffer. Free text.">
+                <input
+                  type="text"
+                  autoComplete="off"
+                  value={provider}
+                  onChange={e => setProvider(e.target.value)}
+                  placeholder="Better Stack"
+                  className="input"
+                />
+              </Field>
+
+              <div className="flex flex-wrap items-center gap-3 rounded-xl border border-navy-100 bg-navy-50/50 px-4 py-3">
+                <label className="inline-flex items-center gap-2 text-xs font-medium text-navy-700">
+                  <input
+                    type="checkbox"
+                    checked={provisioningRequired}
+                    onChange={e => setProvisioningRequired(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-navy-300 text-brand-600 focus:ring-brand-500"
+                  />
+                  Provisioning required
+                </label>
+                <label className="inline-flex items-center gap-2 text-xs font-medium text-navy-700">
+                  <input
+                    type="checkbox"
+                    checked={embedEnabled}
+                    onChange={e => setEmbedEnabled(e.target.checked)}
+                    className="h-3.5 w-3.5 rounded border-navy-300 text-brand-600 focus:ring-brand-500"
+                  />
+                  Embed enabled
+                </label>
+              </div>
 
               {error && (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">

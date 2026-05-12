@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireApiAdmin } from '@/lib/services/admin-guard'
-import {
-  normalizeSchema,
-  type ServiceSchema,
-  type ServiceSummary,
-} from '@/lib/services/types'
+import type { ServiceWithAuth } from '@/lib/services/types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,9 +9,9 @@ export const dynamic = 'force-dynamic'
 const KEY_REGEX = /^[a-z][a-z0-9_-]{1,62}$/
 
 /**
- * GET — list every service offering. Settings *data* is intentionally
- * NOT returned in list view (no decryption); the boolean
- * `has_global_settings` flag tells the UI whether values are stored.
+ * GET — list every service offering with its auth options. Reads from
+ * the `services_with_auth` view so the row already includes a fully-
+ * populated `auth_options` array.
  */
 export async function GET() {
   const guard = await requireApiAdmin()
@@ -23,13 +19,8 @@ export async function GET() {
 
   const admin = createAdminClient()
   const { data, error } = await admin
-    .from('services')
-    .select(`
-      id, key, name, description, icon, enabled, sort_order,
-      created_at, updated_at,
-      global_settings_schema, user_settings_schema,
-      global_settings_data
-    `)
+    .from('services_with_auth')
+    .select('*')
     .order('sort_order', { ascending: true })
     .order('name',       { ascending: true })
 
@@ -41,38 +32,25 @@ export async function GET() {
     )
   }
 
-  const services: ServiceSummary[] = (data ?? []).map(row => ({
-    id:          row.id,
-    key:         row.key,
-    name:        row.name,
-    description: row.description,
-    icon:        row.icon,
-    enabled:     row.enabled,
-    sort_order:  row.sort_order,
-    has_global_settings: Boolean(row.global_settings_data),
-    has_user_settings:   Boolean(row.user_settings_schema),
-    created_at:  row.created_at,
-    updated_at:  row.updated_at,
-  }))
-
-  return NextResponse.json({ services })
+  return NextResponse.json({ services: (data ?? []) as ServiceWithAuth[] })
 }
 
 interface CreateBody {
-  key?:                    string
-  name?:                   string
-  description?:            string | null
-  icon?:                   string | null
-  sort_order?:             number
-  enabled?:                boolean
-  global_settings_schema?: unknown
-  user_settings_schema?:   unknown
+  key?:                   string
+  name?:                  string
+  description?:           string | null
+  icon?:                  string | null
+  sort_order?:            number
+  enabled?:               boolean
+  provider?:              string | null
+  provisioning_required?: boolean
+  embed_enabled?:         boolean
 }
 
 /**
- * POST — create a new service offering. Schemas (but not data) can be
- * provided up front; global data is set on a follow-up PATCH so the
- * encryption is only done once the values are known.
+ * POST — create a new service. Auth options are managed separately at
+ * /api/admin/services/[id]/auth-types, so the newly created service
+ * has no usable auth methods until at least one is added.
  */
 export async function POST(request: Request) {
   const guard = await requireApiAdmin()
@@ -97,22 +75,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Name is required.' }, { status: 400 })
   }
 
-  const globalSchema: ServiceSchema | null = normalizeSchema(body.global_settings_schema)
-  const userSchema:   ServiceSchema | null = normalizeSchema(body.user_settings_schema)
-
   const admin = createAdminClient()
+  const insert: Record<string, unknown> = {
+    key,
+    name,
+    description: typeof body.description === 'string' ? body.description.trim() || null : null,
+    icon:        typeof body.icon        === 'string' ? body.icon.trim()        || null : null,
+    provider:    typeof body.provider    === 'string' ? body.provider.trim()    || null : null,
+    sort_order:  Number.isFinite(body.sort_order) ? Number(body.sort_order) : 0,
+    enabled:     body.enabled !== false,
+  }
+  if (typeof body.provisioning_required === 'boolean') {
+    insert.provisioning_required = body.provisioning_required
+  }
+  if (typeof body.embed_enabled === 'boolean') {
+    insert.embed_enabled = body.embed_enabled
+  }
+
   const { data, error } = await admin
     .from('services')
-    .insert({
-      key,
-      name,
-      description: typeof body.description === 'string' ? body.description.trim() || null : null,
-      icon:        typeof body.icon        === 'string' ? body.icon.trim()        || null : null,
-      sort_order:  Number.isFinite(body.sort_order) ? Number(body.sort_order) : 0,
-      enabled:     body.enabled !== false,
-      global_settings_schema: globalSchema,
-      user_settings_schema:   userSchema,
-    })
+    .insert(insert)
     .select('id')
     .single()
 
