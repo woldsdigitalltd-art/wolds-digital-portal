@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import { Users, Globe, CreditCard, Clock } from 'lucide-react'
+import { Users, CreditCard, Clock } from 'lucide-react'
 import NewCustomerButton from './NewCustomerButton'
+import ManageSitesButton from './ManageSitesButton'
 
 interface AdminCustomer {
   id:                     string
@@ -138,10 +139,12 @@ function CustomerRow({ customer }: { customer: AdminCustomer }) {
         <PlanBadge plan={customer.plan} status={customer.subscription_status} />
       </td>
       <td className="px-4 py-3 text-center">
-        <span className="inline-flex items-center gap-1 text-navy-700">
-          <Globe className="h-3.5 w-3.5 text-navy-400" />
-          {customer.site_count}
-        </span>
+        <ManageSitesButton
+          customerId={customer.id}
+          customerEmail={customer.email}
+          customerName={customer.full_name}
+          initialCount={customer.site_count}
+        />
       </td>
       <td className="px-4 py-3 text-xs text-navy-600">
         <RelativeDate value={customer.last_sign_in_at} fallback="Never" />
