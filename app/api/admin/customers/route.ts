@@ -81,7 +81,7 @@ export async function POST(request: Request) {
       )
     }
     console.error('createUser failed:', createErr)
-    return NextResponse.json({ error: 'Could not create user.' }, { status: 500 })
+    return NextResponse.json({ error: `Could not create user: ${msg || 'unknown error'}` }, { status: 500 })
   }
 
   const newUser = created.user
@@ -91,17 +91,18 @@ export async function POST(request: Request) {
 
   // 4. Upsert the profile row. We use the admin client so RLS doesn't
   //    get in the way. is_admin defaults to false via the column default.
+  //
+  //    Build the patch dynamically so we only send columns we have
+  //    values for — avoids ever overwriting an existing row's data
+  //    with NULL if a trigger has already populated it.
+  const profilePatch: Record<string, unknown> = { id: newUser.id }
+  if (fullName    !== null) profilePatch.full_name    = fullName
+  if (companyName !== null) profilePatch.company_name = companyName
+  if (phone       !== null) profilePatch.phone        = phone
+
   const { error: profileErr } = await admin
     .from('profiles')
-    .upsert(
-      {
-        id:           newUser.id,
-        full_name:    fullName,
-        company_name: companyName,
-        phone,
-      },
-      { onConflict: 'id' }
-    )
+    .upsert(profilePatch, { onConflict: 'id' })
 
   if (profileErr) {
     console.error('profile upsert failed:', profileErr)
@@ -109,8 +110,11 @@ export async function POST(request: Request) {
     await admin.auth.admin.deleteUser(newUser.id).catch(err =>
       console.error('rollback deleteUser failed:', err)
     )
+    const detail = profileErr.message
+      ? `${profileErr.message}${profileErr.hint ? ` (${profileErr.hint})` : ''}`
+      : 'unknown database error'
     return NextResponse.json(
-      { error: 'Could not create customer profile.' },
+      { error: `Could not create customer profile: ${detail}` },
       { status: 500 }
     )
   }
