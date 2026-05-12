@@ -77,6 +77,14 @@ export async function POST(request: Request) {
   // 2. Generate the magic link via the Supabase admin client. This does NOT
   //    trigger Supabase's own email sending — it just returns the link,
   //    which we then deliver via Brevo.
+  //
+  //    We deliberately ignore `data.properties.action_link` (which would
+  //    bounce through Supabase's /auth/v1/verify endpoint and hand the
+  //    session back to the browser via a URL fragment — useless to a
+  //    server route handler). Instead we route directly to our own
+  //    /auth/callback with `token_hash` + `type`, and verify it
+  //    server-side via supabase.auth.verifyOtp, which sets cookies
+  //    properly.
   let magicLink: string
   try {
     const { data, error } = await admin.auth.admin.generateLink({
@@ -85,7 +93,8 @@ export async function POST(request: Request) {
       options: { redirectTo },
     })
 
-    if (error || !data?.properties?.action_link) {
+    const hashedToken = data?.properties?.hashed_token
+    if (error || !hashedToken) {
       console.error('Supabase generateLink failed:', error)
       return NextResponse.json(
         { error: 'Unable to generate sign-in link. Please try again.' },
@@ -93,7 +102,11 @@ export async function POST(request: Request) {
       )
     }
 
-    magicLink = data.properties.action_link
+    const callbackUrl = new URL('/auth/callback', siteUrl)
+    callbackUrl.searchParams.set('token_hash', hashedToken)
+    callbackUrl.searchParams.set('type', 'magiclink')
+    callbackUrl.searchParams.set('next', '/portal')
+    magicLink = callbackUrl.toString()
   } catch (err) {
     console.error('Supabase admin client error:', err)
     return NextResponse.json({ error: 'Unable to generate sign-in link.' }, { status: 500 })
