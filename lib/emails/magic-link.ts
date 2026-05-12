@@ -111,7 +111,7 @@ export function renderMagicLinkEmail({
 
             <!-- CTA -->
             <tr>
-              <td align="center" style="padding:0 32px 12px 32px;">
+              <td align="center" style="padding:0 32px 36px 32px;">
                 <!--[if mso]>
                 <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${magicLink}" style="height:52px;v-text-anchor:middle;width:280px;" arcsize="50%" stroke="f" fillcolor="${NAVY}">
                   <w:anchorlock/>
@@ -126,18 +126,6 @@ export function renderMagicLinkEmail({
                   Sign in to your portal
                 </a>
                 <!--<![endif]-->
-              </td>
-            </tr>
-
-            <!-- Fallback link -->
-            <tr>
-              <td align="center" style="padding:8px 40px 32px 40px;">
-                <p style="margin:0 0 8px 0; font-size:12px; color:${NAVY_500};">
-                  Button not working? Copy and paste this link into your browser:
-                </p>
-                <p style="margin:0; font-size:12px; line-height:1.5; word-break:break-all;">
-                  <a href="${magicLink}" style="color:${BRAND_700}; text-decoration:underline;">${escapeHtml(magicLink)}</a>
-                </p>
               </td>
             </tr>
 
