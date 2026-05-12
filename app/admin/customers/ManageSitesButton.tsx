@@ -2,14 +2,26 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ExternalLink, Globe, Loader2, Plus, X } from 'lucide-react'
+import {
+  Activity,
+  BarChart3,
+  ExternalLink,
+  Globe,
+  Loader2,
+  Plus,
+  X,
+} from 'lucide-react'
 
 interface Site {
-  id:           string
-  domain:       string
-  display_name: string | null
-  owner_id?:    string
+  id:                 string
+  domain:             string
+  display_name:       string | null
+  owner_id?:          string
+  analytics_enabled?: boolean
+  uptime_enabled?:    boolean
 }
+
+type ServiceKey = 'analytics_enabled' | 'uptime_enabled'
 
 interface Props {
   customerId:    string
@@ -36,6 +48,10 @@ export default function ManageSitesButton({
   const [display, setDisplay]   = useState('')
   const [submitting, setSubmit] = useState(false)
   const [submitErr, setSubErr]  = useState<string | null>(null)
+
+  // Tracks which (siteId, service) pairs are mid-flight for spinner feedback.
+  const [pending, setPending] = useState<Set<string>>(new Set())
+  const [toggleErr, setToggleErr] = useState<string | null>(null)
 
   const router = useRouter()
   const firstInputRef = useRef<HTMLInputElement>(null)
@@ -98,6 +114,62 @@ export default function ManageSitesButton({
       aborted = true
     }
   }, [open, customerId])
+
+  async function toggleService(site: Site, service: ServiceKey, next: boolean) {
+    const key = `${site.id}:${service}`
+    setPending(prev => new Set(prev).add(key))
+    setToggleErr(null)
+
+    // Optimistic update — flip the flag immediately and rollback on error.
+    setSites(prev =>
+      (prev ?? []).map(s => (s.id === site.id ? { ...s, [service]: next } : s))
+    )
+
+    try {
+      const res = await fetch(
+        `/api/admin/customers/${customerId}/sites/${site.id}`,
+        {
+          method:  'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body:    JSON.stringify({ [service]: next }),
+        }
+      )
+      const data = (await res.json().catch(() => ({}))) as {
+        site?: Site
+        error?: string
+      }
+
+      if (!res.ok || !data.site) {
+        // Roll back.
+        setSites(prev =>
+          (prev ?? []).map(s =>
+            s.id === site.id ? { ...s, [service]: !next } : s
+          )
+        )
+        setToggleErr(data.error ?? 'Could not update service. Please try again.')
+        return
+      }
+
+      // Sync from server in case it normalised something.
+      setSites(prev =>
+        (prev ?? []).map(s => (s.id === site.id ? { ...s, ...data.site } : s))
+      )
+      router.refresh()
+    } catch {
+      setSites(prev =>
+        (prev ?? []).map(s =>
+          s.id === site.id ? { ...s, [service]: !next } : s
+        )
+      )
+      setToggleErr('Network error. Please try again.')
+    } finally {
+      setPending(prev => {
+        const copy = new Set(prev)
+        copy.delete(key)
+        return copy
+      })
+    }
+  }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault()
@@ -184,6 +256,12 @@ export default function ManageSitesButton({
                   Linked websites
                 </p>
 
+                {toggleErr && (
+                  <div className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                    {toggleErr}
+                  </div>
+                )}
+
                 {loadingList ? (
                   <div className="flex items-center justify-center rounded-2xl border border-dashed border-navy-200 bg-navy-50/40 px-4 py-6 text-xs text-navy-500">
                     <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
@@ -198,25 +276,44 @@ export default function ManageSitesButton({
                     {sites.map(s => (
                       <li
                         key={s.id}
-                        className="flex items-center justify-between gap-3 rounded-xl border border-navy-100 bg-white px-3 py-2.5"
+                        className="rounded-xl border border-navy-100 bg-white p-3"
                       >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-navy-900">
-                            {s.display_name?.trim() || s.domain}
-                          </p>
-                          {s.display_name?.trim() && (
-                            <p className="truncate text-xs text-navy-500">{s.domain}</p>
-                          )}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-navy-900">
+                              {s.display_name?.trim() || s.domain}
+                            </p>
+                            {s.display_name?.trim() && (
+                              <p className="truncate text-xs text-navy-500">{s.domain}</p>
+                            )}
+                          </div>
+                          <a
+                            href={`https://${s.domain}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-navy-100 bg-navy-50/60 px-2.5 py-1 text-[10px] font-semibold text-navy-600 transition hover:border-brand-200 hover:text-brand-700"
+                          >
+                            Visit
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
                         </div>
-                        <a
-                          href={`https://${s.domain}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-navy-100 bg-navy-50/60 px-2.5 py-1 text-[10px] font-semibold text-navy-600 transition hover:border-brand-200 hover:text-brand-700"
-                        >
-                          Visit
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <ServiceToggle
+                            label="Analytics"
+                            icon={BarChart3}
+                            enabled={Boolean(s.analytics_enabled)}
+                            pending={pending.has(`${s.id}:analytics_enabled`)}
+                            onChange={next => toggleService(s, 'analytics_enabled', next)}
+                          />
+                          <ServiceToggle
+                            label="Uptime monitoring"
+                            icon={Activity}
+                            enabled={Boolean(s.uptime_enabled)}
+                            pending={pending.has(`${s.id}:uptime_enabled`)}
+                            onChange={next => toggleService(s, 'uptime_enabled', next)}
+                          />
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -311,5 +408,55 @@ export default function ManageSitesButton({
         }
       `}</style>
     </>
+  )
+}
+
+/**
+ * Pill-style on/off toggle for a single service.
+ * Click toggles the value; while a request is in flight the dot
+ * is replaced with a spinner and the control is disabled.
+ */
+function ServiceToggle({
+  label,
+  icon: Icon,
+  enabled,
+  pending,
+  onChange,
+}: {
+  label:   string
+  icon:    React.ElementType
+  enabled: boolean
+  pending: boolean
+  onChange: (next: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!enabled)}
+      disabled={pending}
+      aria-pressed={enabled}
+      className={`
+        inline-flex items-center gap-2 rounded-full border px-2.5 py-1
+        text-[11px] font-semibold transition
+        disabled:cursor-not-allowed disabled:opacity-70
+        ${
+          enabled
+            ? 'border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100'
+            : 'border-navy-100 bg-navy-50/60 text-navy-600 hover:border-navy-200 hover:bg-navy-50'
+        }
+      `}
+    >
+      <Icon className={`h-3 w-3 ${enabled ? 'text-brand-600' : 'text-navy-400'}`} />
+      {label}
+      {pending ? (
+        <Loader2 className="h-3 w-3 animate-spin text-navy-400" />
+      ) : (
+        <span
+          className={`h-1.5 w-1.5 rounded-full ${
+            enabled ? 'bg-brand-500' : 'bg-navy-300'
+          }`}
+        />
+      )}
+    </button>
   )
 }

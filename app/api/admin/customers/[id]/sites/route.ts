@@ -31,7 +31,7 @@ export async function GET(_request: Request, ctx: RouteCtx) {
   const admin = createAdminClient()
   const { data: sites, error } = await admin
     .from('sites')
-    .select('id, domain, display_name, owner_id')
+    .select('id, domain, display_name, owner_id, analytics_enabled, uptime_enabled')
     .eq('owner_id', customerId)
     .order('domain', { ascending: true })
 
@@ -117,7 +117,7 @@ export async function POST(request: Request, ctx: RouteCtx) {
       domain,
       display_name: displayName,
     })
-    .select('id, domain, display_name, owner_id')
+    .select('id, domain, display_name, owner_id, analytics_enabled, uptime_enabled')
     .single()
 
   if (insertErr) {
