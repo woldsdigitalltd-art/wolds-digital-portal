@@ -6,9 +6,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 interface PatchBody {
-  display_name?:      string | null
-  analytics_enabled?: boolean
-  uptime_enabled?:    boolean
+  display_name?: string | null
 }
 
 interface RouteCtx {
@@ -16,11 +14,8 @@ interface RouteCtx {
 }
 
 /**
- * PATCH — update a single site's metadata or service flags.
- *
- * Service flags toggled here drive what the customer sees in
- * /portal/websites and which services we wire up downstream
- * (e.g. uptime monitoring picks up `uptime_enabled = true` sites).
+ * PATCH — update a site's metadata. Service attachment is now handled
+ * by /api/admin/sites/[siteId]/services rather than per-site flags.
  */
 export async function PATCH(request: Request, ctx: RouteCtx) {
   const { id: customerId, siteId } = await ctx.params
@@ -43,12 +38,6 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
   } else if (body.display_name === null) {
     patch.display_name = null
   }
-  if (typeof body.analytics_enabled === 'boolean') {
-    patch.analytics_enabled = body.analytics_enabled
-  }
-  if (typeof body.uptime_enabled === 'boolean') {
-    patch.uptime_enabled = body.uptime_enabled
-  }
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'No changes supplied.' }, { status: 400 })
@@ -64,7 +53,7 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
     .update(patch)
     .eq('id', siteId)
     .eq('owner_id', customerId)
-    .select('id, domain, display_name, owner_id, analytics_enabled, uptime_enabled')
+    .select('id, domain, display_name, owner_id')
     .maybeSingle()
 
   if (error) {
