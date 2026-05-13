@@ -119,7 +119,15 @@ export async function POST(request: Request) {
     )
   }
 
-  // 5. Optionally send the branded invitation email via Brevo.
+  // 5. Provision Stripe customer — non-fatal if it fails.
+  try {
+    const { provisionStripeCustomer } = await import('@/lib/services/billing')
+    await provisionStripeCustomer(newUser.id)
+  } catch (err) {
+    console.error('Failed to provision Stripe customer:', err)
+  }
+
+  // 6. Optionally send the branded invitation email via Brevo.
   let inviteSent = false
   if (sendInvite) {
     try {
