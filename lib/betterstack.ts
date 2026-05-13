@@ -9,17 +9,18 @@ import 'server-only'
  * touches env vars or the DB.
  */
 
-const API = 'https://uptime.betterstack.com/api/v2'
+const API_ROOT = 'https://uptime.betterstack.com/api'
 
 type Json = Record<string, unknown>
 
 async function request(
-  apiKey: string,
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
-  path:   string,
-  body?:  Json,
+  apiKey:  string,
+  method:  'GET' | 'POST' | 'PUT' | 'DELETE',
+  path:    string,
+  body?:   Json,
+  version: 'v2' | 'v3' = 'v2',
 ): Promise<Json | null> {
-  const res = await fetch(`${API}${path}`, {
+  const res = await fetch(`${API_ROOT}/${version}${path}`, {
     method,
     headers: {
       Authorization:  `Bearer ${apiKey}`,
@@ -39,7 +40,7 @@ async function request(
 
   if (!res.ok) {
     throw new Error(
-      `Better Stack ${method} ${path} [${res.status}]: ${JSON.stringify(json)}`,
+      `Better Stack ${method} /${version}${path} [${res.status}]: ${JSON.stringify(json)}`,
     )
   }
   return json
@@ -88,4 +89,56 @@ export async function getMonitor(
   const data  = await request(apiKey, 'GET', `/monitors/${monitorId}`)
   const attrs = (data as { data?: { attributes: Json } } | null)?.data?.attributes
   return attrs ?? {}
+}
+
+export interface MonitorIncident {
+  started_at:  string         // ISO timestamp
+  resolved_at: string | null  // ISO timestamp, null if still open
+}
+
+/**
+ * List every incident for `monitorId` between `from` and `to`
+ * (YYYY-MM-DD, inclusive of `from`, exclusive of `to`). Handles
+ * pagination automatically. Each row exposes only the two timestamps
+ * needed to compute downtime overlap with arbitrary time buckets.
+ *
+ * Uses Better Stack's v3 incidents endpoint — one call (plus paging)
+ * for the entire range, replacing N parallel SLA calls.
+ */
+export async function getMonitorIncidents(
+  apiKey:    string,
+  monitorId: string,
+  from:      string,
+  to:        string,
+): Promise<MonitorIncident[]> {
+  const out: MonitorIncident[] = []
+  let page = 1
+  const perPage = 50
+
+  // Hard cap on pages so a runaway response can't loop us forever.
+  // 50 incidents/page × 20 = 1000 incidents per range is plenty.
+  for (let i = 0; i < 20; i++) {
+    const path =
+      `/incidents` +
+      `?monitor_id=${encodeURIComponent(monitorId)}` +
+      `&from=${encodeURIComponent(from)}` +
+      `&to=${encodeURIComponent(to)}` +
+      `&per_page=${perPage}&page=${page}`
+
+    const data = await request(apiKey, 'GET', path, undefined, 'v3')
+    const rows = (data as { data?: Array<{ attributes?: Json }> } | null)?.data ?? []
+
+    for (const row of rows) {
+      const a = row.attributes ?? {}
+      const started_at  = typeof a.started_at  === 'string' ? a.started_at  : null
+      const resolved_at = typeof a.resolved_at === 'string' ? a.resolved_at : null
+      if (!started_at) continue
+      out.push({ started_at, resolved_at })
+    }
+
+    if (rows.length < perPage) break
+    page += 1
+  }
+
+  return out
 }

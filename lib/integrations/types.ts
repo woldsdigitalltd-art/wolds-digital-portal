@@ -47,6 +47,8 @@ export interface Integration {
   updated_at?:     string
 }
 
+export type ScheduleFrequency = 'off' | 'daily' | 'weekly' | 'monthly'
+
 export interface SiteIntegration {
   id:                   string
   site_id:              string
@@ -63,6 +65,13 @@ export interface SiteIntegration {
   provisioned_at:       string | null
   created_at:           string
   updated_at:           string
+  /* Schedule fields — only meaningful for audit integrations. */
+  schedule_frequency:    ScheduleFrequency
+  schedule_hour:         number | null
+  schedule_day_of_week:  number | null
+  schedule_day_of_month: number | null
+  schedule_last_run_at:  string | null
+  schedule_next_run_at:  string | null
   /** Present when the API joins `integrations`. */
   integration?:         Pick<Integration, 'key' | 'name'>
 }

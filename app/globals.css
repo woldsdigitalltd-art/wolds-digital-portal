@@ -16,6 +16,13 @@
   body {
     @apply text-navy-900;
   }
+
+  a[href],
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  [role="link"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
 }
 
 @layer utilities {

@@ -12,7 +12,12 @@ export default async function AdminLayout({
     <div className="flex h-screen overflow-hidden">
       <AdminSidebar email={email} />
       <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-6xl px-6 py-10 md:px-8 md:py-12">
+        <div
+          className="
+            mx-auto max-w-6xl px-6 py-10 md:px-8 md:py-12
+            has-[[data-fullbleed]]:mx-0 has-[[data-fullbleed]]:max-w-none has-[[data-fullbleed]]:p-0
+          "
+        >
           {children}
         </div>
       </main>

@@ -60,9 +60,11 @@ export async function fetchSeoAuditBySite(
 }
 
 /**
- * Very loose runtime guard — we don't validate every nested check
- * because the provider's shape can drift; we just need enough to
- * render the headline score and category breakdown.
+ * Very loose runtime guard. The category breakdown helper is defensive
+ * about a missing/malformed `checks` bucket, so we only require the
+ * headline fields here — otherwise valid audits whose `checks` shape
+ * drifts from the type slightly get filtered out and the page falsely
+ * reports "audit pending".
  */
 function isAuditPayload(value: unknown): value is SeoAuditResult {
   if (!value || typeof value !== 'object') return false
@@ -70,7 +72,6 @@ function isAuditPayload(value: unknown): value is SeoAuditResult {
   return (
     typeof v.score === 'number' &&
     typeof v.grade === 'string' &&
-    typeof v.audited_at === 'string' &&
-    typeof v.checks === 'object' && v.checks !== null
+    typeof v.audited_at === 'string'
   )
 }

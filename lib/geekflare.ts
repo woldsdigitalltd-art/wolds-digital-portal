@@ -166,7 +166,7 @@ export async function runBrokenLinksAudit(
   apiKey: string,
   url:    string,
 ): Promise<BrokenLinksResult> {
-  const data = await request(apiKey, 'broken-link', { url })
+  const data = await request(apiKey, 'brokenlink', { url })
   const rows = Array.isArray(data.result) ? (data.result as GeekflareLinkRow[]) : []
 
   const broken  = rows.filter(l => isBroken(l.statusCode))

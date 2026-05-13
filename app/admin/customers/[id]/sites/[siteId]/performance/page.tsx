@@ -1,16 +1,19 @@
 import { notFound } from 'next/navigation'
+import { requireAdmin } from '@/lib/auth/admin-guard'
 import { fetchPageSpeedBySite } from '@/lib/integrations/audits'
 import { loadAuditSchedule } from '@/lib/integrations/schedule-loader'
-import { hasIntegration, loadOwnedSite } from '../site-loader'
-import { PerformanceView } from './PerformanceView'
+import { hasIntegration } from '@/app/portal/websites/[id]/site-loader'
+import { PerformanceView } from '@/app/portal/websites/[id]/performance/PerformanceView'
+import { loadSiteAsAdmin } from '../../site-loader'
 
 interface PageProps {
-  params: Promise<{ id: string }>
+  params: Promise<{ id: string; siteId: string }>
 }
 
-export default async function WebsitePerformancePage({ params }: PageProps) {
-  const { id } = await params
-  const site   = await loadOwnedSite(id)
+export default async function AdminSitePerformancePage({ params }: PageProps) {
+  await requireAdmin()
+  const { id: customerId, siteId } = await params
+  const site = await loadSiteAsAdmin(siteId, customerId)
   if (!site)                            notFound()
   if (!hasIntegration(site, 'pagespeed')) notFound()
 

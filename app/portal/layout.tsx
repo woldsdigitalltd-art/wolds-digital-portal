@@ -57,7 +57,12 @@ export default async function PortalLayout({
         company={profile?.company_name ?? null}
       />
       <main className="relative flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-5xl px-6 py-10 md:px-8 md:py-12">
+        <div
+          className="
+            mx-auto max-w-5xl px-6 py-10 md:px-8 md:py-12
+            has-[[data-fullbleed]]:mx-0 has-[[data-fullbleed]]:max-w-none has-[[data-fullbleed]]:p-0
+          "
+        >
           {children}
         </div>
       </main>

@@ -40,7 +40,7 @@ export function SeoAuditPanel({ audit }: { audit: SeoAuditResult }) {
     <div className="mt-3 rounded-xl border border-navy-100 bg-navy-50/40 p-3">
       <div className="flex items-start gap-3">
         <div className={`flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl ${colour.bg} ring-1 ${colour.ring}`}>
-          <span className={`text-lg font-bold leading-none ${colour.text}`}>{audit.score}</span>
+          <span className={`text-lg font-bold leading-none ${colour.text}`}>{audit.score.toFixed(1)}</span>
           <span className={`text-[9px] font-semibold uppercase tracking-wider ${colour.text}`}>
             {audit.grade}
           </span>

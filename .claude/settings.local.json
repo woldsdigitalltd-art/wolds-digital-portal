@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npx next *)",
+      "WebSearch",
+      "WebFetch(domain:betterstack.com)"
+    ]
+  }
+}
