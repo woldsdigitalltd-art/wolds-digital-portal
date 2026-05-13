@@ -6,10 +6,11 @@ import { createClient } from '@supabase/supabase-js'
  *
  * NEVER expose to the browser. Server-side only.
  *
- * Used for provisioning flows that need to read service-level
- * platform credentials (e.g. the Better Stack API key on
- * `services.global_settings_data`) and write back to `site_services`
- * as the system, not as the requesting admin user.
+ * Used for integration flows that need to read provider credentials
+ * out of `integrations.input_values` and write back to
+ * `site_integrations` as the system, not as the requesting admin
+ * user. Also used by the customer portal to fetch live Better Stack
+ * status without exposing the API key client-side.
  */
 export function createServiceRoleClient() {
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {

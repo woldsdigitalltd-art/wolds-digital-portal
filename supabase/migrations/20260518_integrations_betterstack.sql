@@ -1,15 +1,27 @@
--- Wolds Digital Portal — get_my_websites() rewired onto the new
--- `integrations` and `site_integrations` tables.
+-- Wolds Digital Portal — RPC updates for the integrations rework.
 --
--- Run this in Supabase Dashboard → SQL Editor once the new tables
--- exist. `create or replace` so it's safe to re-run.
+-- The base table changes (integrations.{required_fields, input_values},
+-- site_integrations.{status, provider_resource_id, last_error,
+-- provisioned_at}) were applied out-of-band and the migration file is
+-- not tracked here.
 --
--- It returns each site's `integrations` array (those whose
--- site_integrations.status = 'active') and, when uptime is attached,
--- a flat `uptime` object derived from
--- site_integrations.provider_metadata so the customer pages don't
--- need to know about Better Stack.
+-- This migration just rewires the RPCs the portal/admin pages call so
+-- they speak the new model:
+--
+--   • `get_my_websites()`  — returns each site with its active
+--                            integrations as `{id, key, name}`. The
+--                            old `uptime` snapshot is no longer
+--                            embedded; the websites page fetches live
+--                            status from Better Stack on render.
+--
+--   • `get_admin_stats()`  — counts a site as "monitored" when it has
+--                            an active `betterstack` integration.
+--
+-- Safe to re-run: every statement is `create or replace`.
 
+------------------------------------------------------------
+-- 1.  get_my_websites — sites + active integrations
+------------------------------------------------------------
 create or replace function public.get_my_websites()
 returns json
 language plpgsql
@@ -35,16 +47,13 @@ begin
       coalesce(
         (
           select json_agg(
-            json_build_object(
-              'id',          i.id,
-              'key',         i.key,
-              'name',        i.name,
-              'icon',        i.icon,
-              'description', i.description,
-              'config',      si.config
-            )
-            order by i.sort_order, i.name
-          )
+                   json_build_object(
+                     'id',   i.id,
+                     'key',  i.key,
+                     'name', i.name
+                   )
+                   order by i.name
+                 )
           from public.site_integrations si
           join public.integrations i on i.id = si.integration_id
           where si.site_id = s.id
@@ -52,20 +61,7 @@ begin
             and i.enabled  = true
         ),
         '[]'::json
-      ) as integrations,
-      (
-        select json_build_object(
-          'status',            si.provider_metadata->>'status',
-          'uptime_percentage', (si.provider_metadata->>'uptime_percentage')::numeric,
-          'last_checked_at',   si.provider_metadata->>'last_checked_at'
-        )
-        from public.site_integrations si
-        join public.integrations i on i.id = si.integration_id
-        where si.site_id = s.id
-          and i.key      = 'uptime'
-          and si.status  = 'active'
-        limit 1
-      ) as uptime
+      ) as integrations
     from public.sites s
     where s.owner_id = v_user_id
   ) w;
@@ -76,20 +72,9 @@ $$;
 
 grant execute on function public.get_my_websites() to authenticated;
 
--- IMPORTANT: if your existing `get_my_portal_data()` RPC still
--- references the dropped `uptime_monitors` table, also update it to
--- pull uptime data from `site_integrations.provider_metadata` as
--- above. Its overall return shape can stay the same so the
--- /portal/uptime and /portal dashboard pages don't need code changes.
-
 ------------------------------------------------------------
--- 3.  get_admin_stats() — replace uptime_monitors count
+-- 2.  get_admin_stats — count Better Stack-monitored sites
 ------------------------------------------------------------
--- The admin overview page reads `monitored_sites`. The previous
--- definition counted distinct `site_id` from `uptime_monitors`, which
--- is gone. The new count is the number of sites with an *active*
--- uptime integration.
-
 create or replace function public.get_admin_stats()
 returns json
 language plpgsql
@@ -121,7 +106,7 @@ begin
       select count(distinct si.site_id)
       from public.site_integrations si
       join public.integrations i on i.id = si.integration_id
-      where i.key      = 'uptime'
+      where i.key      = 'betterstack'
         and si.status  = 'active'
     )
   ) into result;

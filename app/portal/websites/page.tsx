@@ -1,29 +1,20 @@
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { fetchUptimeBySite, type LiveUptime } from '@/lib/integrations/uptime'
 import {
   Activity,
-  BarChart3,
+  ArrowRight,
   CheckCircle,
   Clock,
   ExternalLink,
   Globe,
-  Megaphone,
-  ShieldCheck,
   XCircle,
-  Zap,
 } from 'lucide-react'
 
 interface WebsiteIntegration {
-  id:          string
-  key:         string
-  name:        string
-  icon:        string | null
-  description: string | null
-}
-
-interface UptimeSnapshot {
-  status?:            'up' | 'down' | 'paused' | string | null
-  uptime_percentage?: number | string | null
-  last_checked_at?:   string | null
+  id:   string
+  key:  string
+  name: string
 }
 
 interface Website {
@@ -31,20 +22,18 @@ interface Website {
   domain:       string
   display_name: string | null
   integrations: WebsiteIntegration[]
-  uptime:       UptimeSnapshot | null
 }
 
 export default async function WebsitesPage() {
   const supabase = await createClient()
 
-  // get_my_websites returns each site with its active integrations and,
-  // when an uptime integration is attached, the latest live snapshot
-  // from `site_integrations.provider_metadata`.
   const { data, error } = await supabase.rpc('get_my_websites')
-  if (error) {
-    console.error('get_my_websites failed:', error)
-  }
+  if (error) console.error('get_my_websites failed:', error)
   const sites = ((data ?? []) as Website[])
+
+  // Live uptime for any site with Better Stack attached. We fetch from
+  // the provider so the customer always sees the truth.
+  const uptimeMap = await fetchUptimeBySite(sites.map(s => s.id))
 
   return (
     <div>
@@ -72,7 +61,11 @@ export default async function WebsitesPage() {
       ) : (
         <ul className="divide-y divide-white/60 overflow-hidden rounded-2xl border border-white/60 bg-white/55 shadow-soft backdrop-blur-md">
           {sites.map(site => (
-            <WebsiteRow key={site.id} site={site} />
+            <WebsiteRow
+              key={site.id}
+              site={site}
+              uptime={uptimeMap.get(site.id) ?? null}
+            />
           ))}
         </ul>
       )}
@@ -80,20 +73,16 @@ export default async function WebsitesPage() {
   )
 }
 
-function WebsiteRow({ site }: { site: Website }) {
-  const integrations    = site.integrations ?? []
-  const uptimeAttached  = integrations.some(s => s.key === 'uptime')
-  const uptimeSnapshot  = site.uptime ?? null
-
-  const status = (uptimeSnapshot?.status ?? (uptimeAttached ? 'unknown' : null)) as
-    | 'up' | 'down' | 'paused' | 'unknown' | null
-
-  const pct =
-    typeof uptimeSnapshot?.uptime_percentage === 'string'
-      ? Number.parseFloat(uptimeSnapshot.uptime_percentage)
-      : (uptimeSnapshot?.uptime_percentage as number | null | undefined) ?? null
-
-  const display = site.display_name?.trim() || site.domain
+function WebsiteRow({
+  site, uptime,
+}: {
+  site:   Website
+  uptime: LiveUptime | null
+}) {
+  const integrations = site.integrations ?? []
+  const monitored    = integrations.some(i => i.key === 'betterstack')
+  const status       = uptime?.status ?? (monitored ? 'unknown' : null)
+  const display      = site.display_name?.trim() || site.domain
 
   return (
     <li className="flex flex-col gap-4 px-5 py-4 transition hover:bg-white/40 md:flex-row md:items-center md:justify-between md:gap-6">
@@ -120,47 +109,45 @@ function WebsiteRow({ site }: { site: Website }) {
               </span>
             ) : (
               integrations.map(i => (
-                <IntegrationBadge key={i.id} iconName={i.icon} label={i.name} />
+                <IntegrationBadge key={i.id} label={i.name} />
               ))
             )}
           </div>
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-3 md:flex-col md:items-end md:gap-1.5">
-        <StatusPill status={status} />
-        {uptimeAttached && (
-          <p className="text-[11px] text-navy-500">
-            {pct !== null && !Number.isNaN(pct)
-              ? <><strong className="text-navy-700">{pct.toFixed(2)}%</strong> uptime</>
-              : 'Awaiting first check'}
-            {uptimeSnapshot?.last_checked_at && (
-              <span className="ml-1 text-navy-400">
-                · {formatRelative(uptimeSnapshot.last_checked_at)}
-              </span>
-            )}
-          </p>
-        )}
+      <div className="flex shrink-0 flex-col items-stretch gap-2 md:items-end">
+        <div className="flex flex-wrap items-center gap-2 md:flex-col md:items-end md:gap-1.5">
+          <StatusPill status={status} />
+          {monitored && (
+            <p className="text-[11px] text-navy-500">
+              {uptime?.uptime_percentage !== null && uptime?.uptime_percentage !== undefined
+                ? <><strong className="text-navy-700">{uptime.uptime_percentage.toFixed(2)}%</strong> uptime</>
+                : 'Awaiting first check'}
+              {uptime?.last_checked_at && (
+                <span className="ml-1 text-navy-400">
+                  · {formatRelative(uptime.last_checked_at)}
+                </span>
+              )}
+            </p>
+          )}
+        </div>
+        <Link
+          href={`/portal/websites/${site.id}`}
+          className="group/manage inline-flex items-center justify-center gap-1.5 rounded-full bg-navy-900 px-3.5 py-1.5 text-[11px] font-semibold text-white shadow-[0_4px_12px_-4px_rgba(11,37,69,0.35)] transition hover:bg-navy-800"
+        >
+          Manage
+          <ArrowRight className="h-3 w-3 transition group-hover/manage:translate-x-0.5" />
+        </Link>
       </div>
     </li>
   )
 }
 
-const ICON_MAP: Record<string, React.ElementType> = {
-  Activity, BarChart3, CheckCircle, Clock, Globe, Megaphone, ShieldCheck, XCircle, Zap,
-}
-
-function IntegrationBadge({
-  iconName,
-  label,
-}: {
-  iconName: string | null
-  label:    string
-}) {
-  const Icon = (iconName && ICON_MAP[iconName]) || Globe
+function IntegrationBadge({ label }: { label: string }) {
   return (
     <span className="inline-flex items-center gap-1 rounded-full border border-brand-100 bg-brand-50/80 px-2 py-0.5 text-[10px] font-semibold text-brand-700">
-      <Icon className="h-2.5 w-2.5" />
+      <Activity className="h-2.5 w-2.5" />
       {label}
     </span>
   )

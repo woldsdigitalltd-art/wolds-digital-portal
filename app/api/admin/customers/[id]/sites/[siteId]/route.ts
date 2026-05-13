@@ -14,8 +14,8 @@ interface RouteCtx {
 }
 
 /**
- * PATCH — update a site's metadata. Service attachment is now handled
- * by /api/admin/sites/[siteId]/services rather than per-site flags.
+ * PATCH — update a site's metadata. Integration attachments are
+ * handled separately via /api/admin/site-integrations.
  */
 export async function PATCH(request: Request, ctx: RouteCtx) {
   const { id: customerId, siteId } = await ctx.params

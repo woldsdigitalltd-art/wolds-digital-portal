@@ -1,18 +1,41 @@
 import { createClient } from '@/lib/supabase/server'
-import { BarChart3, Activity, Megaphone, CreditCard, ArrowRight, ExternalLink } from 'lucide-react'
+import { fetchUptimeBySite } from '@/lib/integrations/uptime'
+import { Activity, ArrowRight, BarChart3, CreditCard, ExternalLink, Megaphone } from 'lucide-react'
 import Link from 'next/link'
+
+interface WebsiteIntegration {
+  id:   string
+  key:  string
+  name: string
+}
+
+interface Website {
+  id:           string
+  domain:       string
+  display_name: string | null
+  integrations: WebsiteIntegration[]
+}
 
 export default async function PortalPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const { data: portalData } = await supabase.rpc('get_my_portal_data')
+  // Profile fields drive the greeting; everything else is best-effort.
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name, company_name')
+    .eq('id', user?.id ?? '')
+    .maybeSingle()
 
-  const profile   = portalData?.profile
-  const sites     = portalData?.sites ?? []
-  const sub       = portalData?.subscription
-  const firstSite = sites[0]?.site
-  const uptime    = sites[0]?.uptime
+  const { data: websitesRaw } = await supabase.rpc('get_my_websites')
+  const sites = (websitesRaw ?? []) as Website[]
+
+  const firstSite = sites[0] ?? null
+  const monitoredSiteIds = sites
+    .filter(s => (s.integrations ?? []).some(i => i.key === 'betterstack'))
+    .map(s => s.id)
+  const uptimeMap = await fetchUptimeBySite(monitoredSiteIds)
+  const firstUptime = firstSite ? uptimeMap.get(firstSite.id) ?? null : null
 
   const greeting = () => {
     const h = new Date().getHours()
@@ -25,47 +48,44 @@ export default async function PortalPage() {
 
   return (
     <div>
-      {/* Header */}
       <div className="mb-10">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-700 mb-2">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-brand-700">
           Dashboard
         </p>
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-navy-900">
+        <h1 className="text-3xl font-bold tracking-tight text-navy-900 md:text-4xl">
           {greeting()}{displayName ? `, ${displayName}` : ''}
           <span className="text-brand-500">.</span>
         </h1>
-        <p className="mt-2 text-sm md:text-base text-navy-600">
+        <p className="mt-2 text-sm text-navy-600 md:text-base">
           Here&apos;s an overview of your web presence.
         </p>
       </div>
 
-      {/* Site info card */}
       {firstSite && (
         <div className="mb-8 rounded-2xl border border-navy-100 bg-white p-6 shadow-soft">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-navy-400 mb-1">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-navy-400">
                 Your website
               </p>
-              <p className="text-lg font-bold text-navy-900 truncate">
-                {firstSite.display_name}
+              <p className="truncate text-lg font-bold text-navy-900">
+                {firstSite.display_name?.trim() || firstSite.domain}
               </p>
               <a
                 href={`https://${firstSite.domain}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:text-brand-800 transition"
+                className="mt-1 inline-flex items-center gap-1 text-sm font-medium text-brand-700 transition hover:text-brand-800"
               >
                 {firstSite.domain}
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
             </div>
-            <StatusPill status={uptime?.status} />
+            <StatusPill status={firstUptime?.status ?? null} />
           </div>
         </div>
       )}
 
-      {/* Quick links */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <QuickLink
           href="/portal/analytics"
@@ -83,28 +103,25 @@ export default async function PortalPage() {
           href="/portal/uptime"
           icon={Activity}
           title="Uptime"
-          description={uptime?.uptime_percentage
-            ? `${Number(uptime.uptime_percentage).toFixed(2)}% uptime this month`
+          description={firstUptime?.uptime_percentage !== null && firstUptime?.uptime_percentage !== undefined
+            ? `${firstUptime.uptime_percentage.toFixed(2)}% uptime this month`
             : 'Monitor your site availability'}
         />
         <QuickLink
           href="/portal/subscription"
           icon={CreditCard}
           title="Subscription"
-          description={sub?.plan
-            ? `${sub.plan.charAt(0).toUpperCase() + sub.plan.slice(1)} plan — ${sub.status}`
-            : 'Manage your plan and billing'}
+          description="Manage your plan and billing"
         />
       </div>
 
-      {/* No site yet */}
       {!firstSite && (
         <div className="mt-8 rounded-2xl border border-dashed border-navy-200 bg-white/60 p-8 text-center">
           <p className="text-sm text-navy-600">
             Your site details haven&apos;t been set up yet.{' '}
             <a
               href="mailto:hello@woldsdigital.co.uk"
-              className="font-semibold text-brand-700 hover:text-brand-800 underline-offset-2 hover:underline"
+              className="font-semibold text-brand-700 underline-offset-2 hover:underline hover:text-brand-800"
             >
               Get in touch
             </a>{' '}
@@ -116,7 +133,7 @@ export default async function PortalPage() {
   )
 }
 
-function StatusPill({ status }: { status?: string }) {
+function StatusPill({ status }: { status: 'up' | 'down' | 'paused' | 'unknown' | null }) {
   const cfg =
     status === 'up'
       ? { label: 'Online', dot: 'bg-brand-500', text: 'text-brand-700', border: 'border-brand-100', bg: 'bg-brand-50' }
@@ -137,9 +154,9 @@ function StatusPill({ status }: { status?: string }) {
 function QuickLink({
   href, icon: Icon, title, description,
 }: {
-  href: string
-  icon: React.ElementType
-  title: string
+  href:        string
+  icon:        React.ElementType
+  title:       string
   description: string
 }) {
   return (
