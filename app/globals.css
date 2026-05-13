@@ -4,7 +4,8 @@
 
 @layer base {
   :root {
-    --sidebar-width: 264px;
+    --sidebar-width: 72px;
+    --sidebar-expanded-width: 264px;
   }
 
   html {

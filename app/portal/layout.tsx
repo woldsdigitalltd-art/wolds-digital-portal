@@ -32,6 +32,9 @@ export default async function PortalLayout({
     isAdmin = Boolean(adminFlag)
   }
 
+  // Admins live in the admin panel — the portal client view isn't needed for them.
+  if (isAdmin) redirect('/admin')
+
   return (
     <div className="relative flex h-screen overflow-hidden bg-page-gradient">
       {/* Ambient colour blobs — give the glass sidebar something to refract. */}
@@ -52,7 +55,6 @@ export default async function PortalLayout({
         email={user.email ?? ''}
         name={profile?.full_name ?? null}
         company={profile?.company_name ?? null}
-        isAdmin={isAdmin}
       />
       <main className="relative flex-1 overflow-y-auto">
         <div className="mx-auto max-w-5xl px-6 py-10 md:px-8 md:py-12">
