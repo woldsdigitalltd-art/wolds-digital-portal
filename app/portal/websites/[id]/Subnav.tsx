@@ -8,6 +8,7 @@ import {
   Gauge,
   LayoutDashboard,
   SearchCheck,
+  Star,
   Unlink,
 } from 'lucide-react'
 
@@ -19,16 +20,17 @@ interface NavItem {
 }
 
 interface Props {
-  siteId:           string
-  hasSeo:           boolean
-  hasMonitor:       boolean
-  hasPageSpeed:     boolean
-  hasBrokenLinks:   boolean
-  hasStripe:        boolean
+  siteId:              string
+  hasSeo:              boolean
+  hasMonitor:          boolean
+  hasPageSpeed:        boolean
+  hasBrokenLinks:      boolean
+  hasStripe:           boolean
+  hasReviewMonitor:    boolean
 }
 
 export default function Subnav({
-  siteId, hasSeo, hasMonitor, hasPageSpeed, hasBrokenLinks, hasStripe,
+  siteId, hasSeo, hasMonitor, hasPageSpeed, hasBrokenLinks, hasStripe, hasReviewMonitor,
 }: Props) {
   const pathname = usePathname()
   const base     = `/portal/websites/${siteId}`
@@ -46,6 +48,9 @@ export default function Subnav({
       : []),
     ...(hasMonitor
       ? [{ href: `${base}/monitoring`,   label: 'Monitoring',         icon: Activity    } as NavItem]
+      : []),
+    ...(hasReviewMonitor
+      ? [{ href: `${base}/reviews`,      label: 'Review Monitoring',  icon: Star        } as NavItem]
       : []),
     ...(hasStripe
       ? [{ href: '/portal/billing',      label: 'Billing',            icon: CreditCard  } as NavItem]

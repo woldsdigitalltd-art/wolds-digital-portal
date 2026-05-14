@@ -52,6 +52,7 @@ export async function GET(request: Request) {
     .select(`
       id, site_id, integration_id, status,
       provider_resource_id, provider_metadata,
+      input_values,
       last_error, provisioned_at,
       created_at, updated_at,
       integration:integrations ( key, name )
@@ -74,6 +75,7 @@ export async function GET(request: Request) {
 interface CreateBody {
   site_id?:        string
   integration_id?: string
+  input_values?:   Record<string, string>
 }
 
 /**
@@ -96,7 +98,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
   }
 
-  const { site_id, integration_id } = body
+  const { site_id, integration_id, input_values } = body
   if (!site_id || !integration_id) {
     return NextResponse.json(
       { error: 'site_id and integration_id are both required.' },
@@ -132,7 +134,7 @@ export async function POST(request: Request) {
 
   const { data: site, error: siteErr } = await sr
     .from('sites')
-    .select('id, domain, display_name')
+    .select('id, domain, display_name, review_tracking_mode')
     .eq('id', site_id)
     .maybeSingle()
   if (siteErr || !site) {
@@ -146,6 +148,7 @@ export async function POST(request: Request) {
       integration_id,
       status:     'pending',
       last_error: null,
+      input_values: input_values ?? {},
     })
     .select('*')
     .single()
@@ -174,8 +177,9 @@ export async function POST(request: Request) {
   try {
     const finalLink = await provisionForIntegration({
       integration,
-      site:        { domain: site.domain as string, display_name: site.display_name as string | null },
+      site:        { id: site_id, domain: site.domain as string, display_name: site.display_name as string | null },
       siteIntegrationId: link.id,
+      perSiteValues: input_values ?? {},
     })
     return NextResponse.json({ link: finalLink }, { status: 201 })
   } catch (err) {
@@ -207,16 +211,50 @@ async function provisionForIntegration({
   integration,
   site,
   siteIntegrationId,
+  perSiteValues,
 }: {
   integration:       Integration
-  site:              { domain: string; display_name: string | null }
+  site:              { id: string; domain: string; display_name: string | null }
   siteIntegrationId: string
+  perSiteValues:     Record<string, string>
 }): Promise<SiteIntegrationListItem> {
   const sr      = createServiceRoleClient()
   const values  = (integration.input_values ?? {}) as Record<string, string>
   const url     = site.domain.startsWith('http') ? site.domain : `https://${site.domain}`
 
-  if (integration.key === 'betterstack') {
+  if (integration.key === 'google_places') {
+    const placeId = perSiteValues.place_id
+    const mode    = (perSiteValues.mode ?? 'summary') as 'full' | 'summary'
+    if (!placeId) throw new Error('Google Place ID is required.')
+
+    await sr.from('sites').update({
+      google_place_id:      placeId,
+      review_tracking_mode: mode,
+    }).eq('id', site.id)
+
+    await sr.from('site_integrations').update({
+      status:         'active',
+      provisioned_at: new Date().toISOString(),
+      last_error:     null,
+    }).eq('id', siteIntegrationId)
+
+  } else if (integration.key === 'trustpilot') {
+    const domain = perSiteValues.domain
+    const mode   = (perSiteValues.mode ?? 'summary') as 'full' | 'summary'
+    if (!domain) throw new Error('Trustpilot business domain is required.')
+
+    await sr.from('sites').update({
+      trustpilot_domain:    domain,
+      review_tracking_mode: mode,
+    }).eq('id', site.id)
+
+    await sr.from('site_integrations').update({
+      status:         'active',
+      provisioned_at: new Date().toISOString(),
+      last_error:     null,
+    }).eq('id', siteIntegrationId)
+
+  } else if (integration.key === 'betterstack') {
     const apiKey = values.api_key
     if (!apiKey) throw new Error('Better Stack API key is missing.')
 
@@ -266,6 +304,7 @@ async function provisionForIntegration({
     .select(`
       id, site_id, integration_id, status,
       provider_resource_id, provider_metadata,
+      input_values,
       last_error, provisioned_at,
       created_at, updated_at,
       integration:integrations ( key, name )

@@ -44,11 +44,13 @@ export default function ServicesPanel({ siteId, initialIntegrations, initialLink
   const [error, setError]           = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [scheduleOpenId, setScheduleOpenId] = useState<string | null>(null)
+  const [configModalId, setConfigModalId] = useState<string | null>(null)
+  const [configValues, setConfigValues]   = useState<Record<string, string>>({})
 
   const linkedIds = new Set(links.map(l => l.integration_id))
   const available = integrations.filter(i => !linkedIds.has(i.id))
 
-  async function attach(integrationId: string) {
+  async function attach(integrationId: string, inputValues?: Record<string, string>) {
     const key = `attach:${integrationId}`
     setPending(prev => new Set(prev).add(key))
     setError(null)
@@ -56,7 +58,7 @@ export default function ServicesPanel({ siteId, initialIntegrations, initialLink
       const res = await fetch('/api/admin/site-integrations', {
         method:  'POST',
         headers: { 'content-type': 'application/json' },
-        body:    JSON.stringify({ site_id: siteId, integration_id: integrationId }),
+        body:    JSON.stringify({ site_id: siteId, integration_id: integrationId, input_values: inputValues }),
       })
       const data = (await res.json().catch(() => ({}))) as {
         link?:  SiteIntegrationListItem
@@ -305,6 +307,7 @@ export default function ServicesPanel({ siteId, initialIntegrations, initialLink
             <div className="absolute left-0 right-0 z-10 mt-1 max-h-64 overflow-y-auto rounded-2xl border border-navy-100 bg-white py-1 shadow-lg">
               {available.map(integration => {
                 const attaching = pending.has(`attach:${integration.id}`)
+                const needsConfig = ['google_places', 'trustpilot'].includes(integration.key)
                 return (
                   <button
                     key={integration.id}
@@ -312,7 +315,12 @@ export default function ServicesPanel({ siteId, initialIntegrations, initialLink
                     disabled={attaching}
                     onClick={async () => {
                       setPickerOpen(false)
-                      await attach(integration.id)
+                      if (needsConfig) {
+                        setConfigModalId(integration.id)
+                        setConfigValues({})
+                      } else {
+                        await attach(integration.id)
+                      }
                     }}
                     className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm text-navy-800 transition hover:bg-brand-50/60 disabled:opacity-50"
                   >
@@ -338,6 +346,25 @@ export default function ServicesPanel({ siteId, initialIntegrations, initialLink
             </a>.
           </p>
         )
+      )}
+
+      {configModalId && (
+        <ConfigModal
+          integrationId={configModalId}
+          integration={integrations.find(i => i.id === configModalId)!}
+          values={configValues}
+          onValuesChange={setConfigValues}
+          onConfirm={async () => {
+            await attach(configModalId, configValues)
+            setConfigModalId(null)
+            setConfigValues({})
+          }}
+          onCancel={() => {
+            setConfigModalId(null)
+            setConfigValues({})
+          }}
+          saving={pending.has(`attach:${configModalId}`)}
+        />
       )}
     </div>
   )
@@ -481,6 +508,160 @@ function iconForIntegration(key: string) {
     case 'brokenlinks': return Unlink
     default:            return Boxes
   }
+}
+
+type PerSiteTextField = {
+  type:        'text'
+  key:         string
+  label:       string
+  placeholder: string
+  help:        string
+}
+type PerSiteSelectField = {
+  type:    'select'
+  key:     string
+  label:   string
+  options: { value: string; label: string; description: string }[]
+  help:    string
+}
+type PerSiteField = PerSiteTextField | PerSiteSelectField
+
+const MODE_FIELD: PerSiteSelectField = {
+  type:  'select',
+  key:   'mode',
+  label: 'Review tracking mode',
+  options: [
+    {
+      value:       'full',
+      label:       'Full integration',
+      description: 'Fetches all individual review text, ratings, and reviewer names.',
+    },
+    {
+      value:       'summary',
+      label:       'Summary only',
+      description: 'Collects the overall rating and total count — no individual review text.',
+    },
+  ],
+  help: 'Summary is lighter on API quota. Full mode enables displaying individual reviews to the customer.',
+}
+
+const PER_SITE_FIELDS: Record<string, PerSiteField[]> = {
+  google_places: [
+    {
+      type:        'text',
+      key:         'place_id',
+      label:       'Google Place ID',
+      placeholder: 'ChIJ…',
+      help:        'Find it on Google Maps: search for the business, click Share, and copy the Place ID from the URL.',
+    },
+    MODE_FIELD,
+  ],
+  trustpilot: [
+    {
+      type:        'text',
+      key:         'domain',
+      label:       'Business Domain',
+      placeholder: 'example.com',
+      help:        'The domain registered with Trustpilot (without https://).',
+    },
+    MODE_FIELD,
+  ],
+}
+
+function ConfigModal({
+  integration,
+  values,
+  onValuesChange,
+  onConfirm,
+  onCancel,
+  saving,
+}: {
+  integrationId:  string
+  integration:    Integration
+  values:         Record<string, string>
+  onValuesChange: (v: Record<string, string>) => void
+  onConfirm:      () => Promise<void>
+  onCancel:       () => void
+  saving:         boolean
+}) {
+  const fields = PER_SITE_FIELDS[integration.key] ?? []
+  const canSubmit = fields.every(f => String(values[f.key] ?? '').trim())
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-navy-100 bg-white p-6 shadow-xl">
+        <p className="text-sm font-semibold text-navy-900">Configure {integration.name}</p>
+        <p className="mt-0.5 text-xs text-navy-500">
+          These details are stored per-site and used when fetching review data.
+        </p>
+
+        <div className="mt-4 space-y-4">
+          {fields.map(f => (
+            <div key={f.key}>
+              <label className="block text-[11px] font-semibold uppercase tracking-wide text-navy-500">
+                {f.label}
+              </label>
+              {f.type === 'text' ? (
+                <input
+                  type="text"
+                  value={values[f.key] ?? ''}
+                  onChange={e => onValuesChange({ ...values, [f.key]: e.target.value })}
+                  placeholder={f.placeholder}
+                  className="mt-1 w-full rounded-lg border border-navy-200 bg-white px-3 py-2 text-sm text-navy-900 placeholder:text-navy-300 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+                />
+              ) : (
+                <div className="mt-1.5 space-y-1.5">
+                  {f.options.map(opt => {
+                    const selected = (values[f.key] ?? f.options[0].value) === opt.value
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => onValuesChange({ ...values, [f.key]: opt.value })}
+                        className={`w-full rounded-xl border px-3.5 py-2.5 text-left transition ${
+                          selected
+                            ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500/30'
+                            : 'border-navy-200 bg-white hover:border-navy-300 hover:bg-navy-50/60'
+                        }`}
+                      >
+                        <p className={`text-xs font-semibold ${selected ? 'text-brand-800' : 'text-navy-900'}`}>
+                          {opt.label}
+                        </p>
+                        <p className="mt-0.5 text-[10px] leading-snug text-navy-500">{opt.description}</p>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {f.help && (
+                <p className="mt-1.5 text-[10px] leading-snug text-navy-400">{f.help}</p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={onCancel}
+            className="rounded-full border border-navy-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-navy-700 transition hover:bg-navy-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={saving || !canSubmit}
+            onClick={onConfirm}
+            className="inline-flex items-center gap-1 rounded-full bg-navy-900 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-navy-800 disabled:opacity-50"
+          >
+            {saving && <Loader2 className="h-3 w-3 animate-spin" />}
+            {saving ? 'Attaching…' : 'Attach'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function StatusBadge({ status }: { status: IntegrationStatus }) {

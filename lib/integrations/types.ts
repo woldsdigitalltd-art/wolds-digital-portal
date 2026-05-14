@@ -61,6 +61,11 @@ export interface SiteIntegration {
    * it live (e.g. SEO Score stores the latest audit report here).
    */
   provider_metadata:    Record<string, unknown> | null
+  /**
+   * Per-site configuration values (e.g. google_place_id, trustpilot_domain).
+   * Stored locally rather than as separate columns for flexibility.
+   */
+  input_values:         Record<string, string> | null
   last_error:           string | null
   provisioned_at:       string | null
   created_at:           string

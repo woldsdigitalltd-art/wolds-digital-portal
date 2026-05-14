@@ -128,7 +128,7 @@ export async function DELETE(_req: Request, ctx: RouteCtx) {
   const { data: row, error: loadErr } = await sr
     .from('site_integrations')
     .select(`
-      id, provider_resource_id,
+      id, site_id, provider_resource_id, input_values,
       integration:integrations ( key, input_values )
     `)
     .eq('id', id)
@@ -151,7 +151,11 @@ export async function DELETE(_req: Request, ctx: RouteCtx) {
   const integration = link.integration
   const monitorId   = link.provider_resource_id
 
-  if (monitorId && integration?.key === 'betterstack') {
+  if (integration?.key === 'google_places') {
+    await sr.from('sites').update({ google_place_id: null }).eq('id', link.site_id)
+  } else if (integration?.key === 'trustpilot') {
+    await sr.from('sites').update({ trustpilot_domain: null }).eq('id', link.site_id)
+  } else if (monitorId && integration?.key === 'betterstack') {
     const apiKey = (integration.input_values ?? {})['api_key']
     if (apiKey) {
       try {

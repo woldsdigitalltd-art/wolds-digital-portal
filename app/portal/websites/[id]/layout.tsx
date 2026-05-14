@@ -15,10 +15,11 @@ export default async function WebsiteLayout({ children, params }: LayoutProps) {
   const [site, supabase] = await Promise.all([loadOwnedSite(id), createClient()])
   if (!site) notFound()
 
-  const hasSeo         = hasIntegration(site, 'seoscoreapi')
-  const hasMonitor     = hasIntegration(site, 'betterstack')
-  const hasPageSpeed   = hasIntegration(site, 'pagespeed')
-  const hasBrokenLinks = hasIntegration(site, 'brokenlinks')
+  const hasSeo           = hasIntegration(site, 'seoscoreapi')
+  const hasMonitor       = hasIntegration(site, 'betterstack')
+  const hasPageSpeed     = hasIntegration(site, 'pagespeed')
+  const hasBrokenLinks   = hasIntegration(site, 'brokenlinks')
+  const hasReviewMonitor = hasIntegration(site, 'google_places') || hasIntegration(site, 'trustpilot')
   const display        = site.display_name?.trim() || site.domain
 
   const { data: { user } } = await supabase.auth.getUser()
@@ -36,6 +37,7 @@ export default async function WebsiteLayout({ children, params }: LayoutProps) {
         hasPageSpeed={hasPageSpeed}
         hasBrokenLinks={hasBrokenLinks}
         hasStripe={hasStripe}
+        hasReviewMonitor={hasReviewMonitor}
       />
 
       <div className="min-w-0 flex-1 px-6 py-10 md:px-8 md:py-12">

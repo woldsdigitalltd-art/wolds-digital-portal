@@ -58,7 +58,6 @@ begin
           join public.integrations i on i.id = si.integration_id
           where si.site_id = s.id
             and si.status  = 'active'
-            and i.enabled  = true
         ),
         '[]'::json
       ) as integrations
