@@ -11,7 +11,14 @@
       "Bash(kill %1)",
       "Bash(xattr -d com.apple.quarantine \"/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/node_modules/@next/swc-darwin-arm64/next-swc.darwin-arm64.node\")",
       "Bash(kill 33557)",
-      "Bash(git checkout *)"
+      "Bash(git checkout *)",
+      "mcp__4d7125c6-16bf-4d37-95de-08e57ed06ae0__execute_sql",
+      "mcp__4d7125c6-16bf-4d37-95de-08e57ed06ae0__apply_migration",
+      "Bash(PATH=/opt/homebrew/bin:__TRACKED_VAR__ npm run build)",
+      "Bash(PATH=/opt/homebrew/bin:__TRACKED_VAR__ npm install stripe)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(PATH=/opt/homebrew/bin:__TRACKED_VAR__ git push origin main)"
     ]
   }
 }
