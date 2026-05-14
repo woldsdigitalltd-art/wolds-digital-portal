@@ -19,10 +19,11 @@ export default async function AdminWebsiteLayout({ children, params }: LayoutPro
   const site = await loadSiteAsAdmin(siteId, customerId)
   if (!site) notFound()
 
-  const hasSeo         = hasIntegration(site, 'seoscoreapi')
-  const hasMonitor     = hasIntegration(site, 'betterstack')
-  const hasPageSpeed   = hasIntegration(site, 'pagespeed')
-  const hasBrokenLinks = hasIntegration(site, 'brokenlinks')
+  const hasSeo           = hasIntegration(site, 'seoscoreapi')
+  const hasMonitor       = hasIntegration(site, 'betterstack')
+  const hasPageSpeed     = hasIntegration(site, 'pagespeed')
+  const hasBrokenLinks   = hasIntegration(site, 'brokenlinks')
+  const hasReviewMonitor = hasIntegration(site, 'google_places') || hasIntegration(site, 'trustpilot')
   const display        = site.display_name?.trim() || site.domain
 
   const admin = createAdminClient()
@@ -53,6 +54,7 @@ export default async function AdminWebsiteLayout({ children, params }: LayoutPro
         hasPageSpeed={hasPageSpeed}
         hasBrokenLinks={hasBrokenLinks}
         hasStripe={hasStripe}
+        hasReviewMonitor={hasReviewMonitor}
       />
 
       <div className="min-w-0 flex-1 px-6 py-10 md:px-8 md:py-12">

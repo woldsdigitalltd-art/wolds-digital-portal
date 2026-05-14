@@ -9,6 +9,7 @@ import {
   Gauge,
   LayoutDashboard,
   SearchCheck,
+  Star,
   Unlink,
 } from 'lucide-react'
 
@@ -20,18 +21,19 @@ interface NavItem {
 }
 
 interface Props {
-  customerId:     string
-  siteId:         string
-  hasSeo:         boolean
-  hasMonitor:     boolean
-  hasPageSpeed:   boolean
-  hasBrokenLinks: boolean
-  hasStripe:      boolean
+  customerId:       string
+  siteId:           string
+  hasSeo:           boolean
+  hasMonitor:       boolean
+  hasPageSpeed:     boolean
+  hasBrokenLinks:   boolean
+  hasStripe:        boolean
+  hasReviewMonitor: boolean
 }
 
 export default function Subnav({
   customerId, siteId,
-  hasSeo, hasMonitor, hasPageSpeed, hasBrokenLinks, hasStripe,
+  hasSeo, hasMonitor, hasPageSpeed, hasBrokenLinks, hasStripe, hasReviewMonitor,
 }: Props) {
   const pathname = usePathname()
   const base     = `/admin/customers/${customerId}/sites/${siteId}`
@@ -49,6 +51,9 @@ export default function Subnav({
       : []),
     ...(hasMonitor
       ? [{ href: `${base}/monitoring`,   label: 'Monitoring',        icon: Activity    } as NavItem]
+      : []),
+    ...(hasReviewMonitor
+      ? [{ href: `${base}/reviews`,      label: 'Review Monitoring', icon: Star        } as NavItem]
       : []),
     { href: `${base}/services`,   label: 'Services',          icon: Boxes },
     ...(hasStripe

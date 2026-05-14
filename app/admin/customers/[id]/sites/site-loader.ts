@@ -50,7 +50,7 @@ export const loadSiteAsAdmin = cache(
     type LinkRow = { integrations: { id: string; key: string; name: string; enabled: boolean } | null }
     const integrations = ((links ?? []) as unknown as LinkRow[])
       .map(l => l.integrations)
-      .filter((i): i is { id: string; key: string; name: string; enabled: boolean } => !!i && i.enabled)
+      .filter((i): i is { id: string; key: string; name: string; enabled: boolean } => !!i)
       .map(i => ({ id: i.id, key: i.key, name: i.name }))
       .sort((a, b) => a.name.localeCompare(b.name))
 
