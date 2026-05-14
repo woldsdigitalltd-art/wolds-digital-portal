@@ -94,7 +94,7 @@ export async function getSiteReviewConfig(
       'id, domain, owner_id, review_tracking_mode, google_place_id, trustpilot_domain, google_current_rating, google_total_reviews, trustpilot_score, trustpilot_total_reviews, reviews_last_checked_at'
     )
     .eq('id', siteId)
-    .single()
+    .maybeSingle()
 
   if (error) throw error
   return data

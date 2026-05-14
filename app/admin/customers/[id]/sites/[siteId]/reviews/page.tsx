@@ -2,11 +2,8 @@ import { notFound } from 'next/navigation'
 import { requireAdmin } from '@/lib/auth/admin-guard'
 import { hasIntegration } from '@/app/portal/websites/[id]/site-loader'
 import { loadSiteAsAdmin } from '../../site-loader'
-import {
-  getSiteReviewConfig,
-  getSnapshotsForSite,
-  getReviewsForSite,
-} from '@/lib/services/review-monitor'
+import { createAdminClient } from '@/lib/supabase/admin'
+import type { SiteWithReviewConfig, ReviewSnapshot, Review } from '@/lib/services/review-monitor'
 import { ReviewsView } from '@/app/portal/websites/[id]/reviews/ReviewsView'
 
 interface PageProps {
@@ -22,14 +19,22 @@ export default async function AdminReviewsPage({ params }: PageProps) {
   const hasTrustpilot = site && hasIntegration(site, 'trustpilot')
   if (!site || (!hasGoogle && !hasTrustpilot)) notFound()
 
-  const config = await getSiteReviewConfig(siteId)
+  // Use service-role client so RLS doesn't block reading another user's site row.
+  const admin = createAdminClient()
+  const { data: config } = await admin
+    .from('sites')
+    .select('id, domain, owner_id, review_tracking_mode, google_place_id, trustpilot_domain, google_current_rating, google_total_reviews, trustpilot_score, trustpilot_total_reviews, reviews_last_checked_at')
+    .eq('id', siteId)
+    .maybeSingle() as { data: SiteWithReviewConfig | null }
 
-  const [snapshots, reviews] = await Promise.all([
-    getSnapshotsForSite(siteId, undefined, 60),
+  const [{ data: snapshotRows }, { data: reviewRows }] = await Promise.all([
+    admin.from('review_snapshots').select('*').eq('site_id', siteId).order('snapshot_date', { ascending: false }).limit(60),
     config?.review_tracking_mode === 'full'
-      ? getReviewsForSite(siteId, undefined, 100)
-      : Promise.resolve([]),
+      ? admin.from('reviews').select('*').eq('site_id', siteId).order('reviewed_at', { ascending: false }).limit(100)
+      : Promise.resolve({ data: [] }),
   ])
+  const snapshots = (snapshotRows ?? []) as ReviewSnapshot[]
+  const reviews   = (reviewRows   ?? []) as Review[]
 
   return (
     <ReviewsView
