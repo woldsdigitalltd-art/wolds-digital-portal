@@ -4,7 +4,14 @@
       "Bash(npx tsc *)",
       "Bash(npx next *)",
       "WebSearch",
-      "WebFetch(domain:betterstack.com)"
+      "WebFetch(domain:betterstack.com)",
+      "Bash(PATH=/opt/homebrew/bin:__TRACKED_VAR__ npm rebuild sharp)",
+      "Bash(PATH=/opt/homebrew/bin:__TRACKED_VAR__ npm rebuild)",
+      "Bash(PATH=/opt/homebrew/bin:__TRACKED_VAR__ npm run dev)",
+      "Bash(kill %1)",
+      "Bash(xattr -d com.apple.quarantine \"/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/node_modules/@next/swc-darwin-arm64/next-swc.darwin-arm64.node\")",
+      "Bash(kill 33557)",
+      "Bash(git checkout *)"
     ]
   }
 }
