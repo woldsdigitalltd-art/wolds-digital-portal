@@ -1,11 +1,6 @@
 import 'server-only'
 
-if (!process.env.TRUSTPILOT_API_KEY) {
-  throw new Error('Missing TRUSTPILOT_API_KEY environment variable')
-}
-
 const TRUSTPILOT_API_BASE = 'https://api.trustpilot.com/v1'
-const API_KEY = process.env.TRUSTPILOT_API_KEY
 
 export type TrustpilotBusinessUnit = {
   businessUnitId: string
@@ -37,12 +32,13 @@ export type TrustpilotDetails = {
  * Used by admin when configuring a site.
  */
 export async function findBusinessUnit(
+  apiKey: string,
   domain: string
 ): Promise<TrustpilotBusinessUnit | null> {
   const response = await fetch(
     `${TRUSTPILOT_API_BASE}/business-units/find?name=${encodeURIComponent(domain)}`,
     {
-      headers: { apikey: API_KEY },
+      headers: { apikey: apiKey },
     }
   )
 
@@ -68,15 +64,16 @@ export async function findBusinessUnit(
  * Used by the daily cron job.
  */
 export async function getBusinessUnitDetails(
+  apiKey: string,
   domain: string,
   fetchReviews = false
 ): Promise<TrustpilotDetails | null> {
-  const unit = await findBusinessUnit(domain)
+  const unit = await findBusinessUnit(apiKey, domain)
   if (!unit) return null
 
   const summaryRes = await fetch(
     `${TRUSTPILOT_API_BASE}/business-units/${unit.businessUnitId}`,
-    { headers: { apikey: API_KEY } }
+    { headers: { apikey: apiKey } }
   )
 
   if (!summaryRes.ok) {
@@ -90,7 +87,7 @@ export async function getBusinessUnitDetails(
   if (fetchReviews) {
     const reviewsRes = await fetch(
       `${TRUSTPILOT_API_BASE}/business-units/${unit.businessUnitId}/reviews?perPage=20&orderBy=createdat.desc`,
-      { headers: { apikey: API_KEY } }
+      { headers: { apikey: apiKey } }
     )
 
     if (reviewsRes.ok) {

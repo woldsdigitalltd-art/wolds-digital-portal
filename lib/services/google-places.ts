@@ -1,11 +1,6 @@
 import 'server-only'
 
-if (!process.env.GOOGLE_PLACES_API_KEY) {
-  throw new Error('Missing GOOGLE_PLACES_API_KEY environment variable')
-}
-
 const PLACES_API_BASE = 'https://places.googleapis.com/v1'
-const API_KEY = process.env.GOOGLE_PLACES_API_KEY
 
 export type PlaceSearchResult = {
   placeId: string
@@ -34,12 +29,12 @@ export type PlaceReview = {
 /**
  * Search for a business by name. Used by admin to find and link a Place ID to a site.
  */
-export async function searchPlaces(query: string): Promise<PlaceSearchResult[]> {
+export async function searchPlaces(apiKey: string, query: string): Promise<PlaceSearchResult[]> {
   const response = await fetch(`${PLACES_API_BASE}/places:searchText`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Goog-Api-Key': API_KEY,
+      'X-Goog-Api-Key': apiKey,
       'X-Goog-FieldMask':
         'places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount',
     },
@@ -66,12 +61,12 @@ export async function searchPlaces(query: string): Promise<PlaceSearchResult[]> 
  * Fetch current rating, review count, and recent reviews for a Place ID.
  * Used by the daily cron job.
  */
-export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
+export async function getPlaceDetails(apiKey: string, placeId: string): Promise<PlaceDetails> {
   const response = await fetch(
     `${PLACES_API_BASE}/places/${placeId}`,
     {
       headers: {
-        'X-Goog-Api-Key': API_KEY,
+        'X-Goog-Api-Key': apiKey,
         'X-Goog-FieldMask':
           'id,displayName,rating,userRatingCount,reviews',
       },

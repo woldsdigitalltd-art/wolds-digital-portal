@@ -152,63 +152,83 @@ export async function runReviewCheckForSite(
   const supabase = await createClient()
   const isFullMode = site.review_tracking_mode === 'full'
 
+  // Fetch API keys from the integrations catalogue (stored per-integration, not env vars).
+  const { data: integrationRows } = await supabase
+    .from('integrations')
+    .select('key, input_values')
+    .in('key', ['google_places', 'trustpilot'])
+
+  const integrationMap = Object.fromEntries(
+    (integrationRows ?? []).map(r => [r.key, (r.input_values ?? {}) as Record<string, string>])
+  )
+
   // ── Google ──
   if (site.google_place_id) {
-    try {
-      const details = await getPlaceDetails(site.google_place_id)
+    const googleApiKey = integrationMap['google_places']?.api_key
+    if (!googleApiKey) {
+      console.warn(`Google Places API key not configured — skipping Google check for ${site.domain}`)
+    } else {
+      try {
+        const details = await getPlaceDetails(googleApiKey, site.google_place_id)
 
-      const previousTotal = site.google_total_reviews ?? 0
-      const newTotal = details.totalReviews ?? 0
-      const newReviewsCount = Math.max(0, newTotal - previousTotal)
+        const previousTotal = site.google_total_reviews ?? 0
+        const newTotal = details.totalReviews ?? 0
+        const newReviewsCount = Math.max(0, newTotal - previousTotal)
 
-      await supabase.from('review_snapshots').upsert(
-        {
-          site_id: site.id,
-          source: 'google',
-          snapshot_date: new Date().toISOString().split('T')[0],
-          rating: details.rating,
-          total_reviews: newTotal,
-          new_reviews: newReviewsCount,
-        },
-        { onConflict: 'site_id,source,snapshot_date' }
-      )
-
-      await supabase
-        .from('sites')
-        .update({
-          google_current_rating: details.rating,
-          google_total_reviews: newTotal,
-        })
-        .eq('id', site.id)
-
-      if (isFullMode && details.reviews.length > 0) {
-        const rows = details.reviews
-          .filter(r => r.reviewedAt && !isToday(r.reviewedAt))
-          .map(r => ({
+        await supabase.from('review_snapshots').upsert(
+          {
             site_id: site.id,
-            source: 'google' as const,
-            external_id: r.externalId,
-            reviewer_name: r.reviewerName,
-            rating: r.rating,
-            review_text: r.text,
-            reviewed_at: r.reviewedAt?.toISOString() ?? null,
-          }))
+            source: 'google',
+            snapshot_date: new Date().toISOString().split('T')[0],
+            rating: details.rating,
+            total_reviews: newTotal,
+            new_reviews: newReviewsCount,
+          },
+          { onConflict: 'site_id,source,snapshot_date' }
+        )
 
-        if (rows.length > 0) {
-          await supabase
-            .from('reviews')
-            .upsert(rows, { onConflict: 'site_id,source,external_id', ignoreDuplicates: true })
+        await supabase
+          .from('sites')
+          .update({
+            google_current_rating: details.rating,
+            google_total_reviews: newTotal,
+          })
+          .eq('id', site.id)
+
+        if (isFullMode && details.reviews.length > 0) {
+          const rows = details.reviews
+            .filter(r => r.reviewedAt && !isToday(r.reviewedAt))
+            .map(r => ({
+              site_id: site.id,
+              source: 'google' as const,
+              external_id: r.externalId,
+              reviewer_name: r.reviewerName,
+              rating: r.rating,
+              review_text: r.text,
+              reviewed_at: r.reviewedAt?.toISOString() ?? null,
+            }))
+
+          if (rows.length > 0) {
+            await supabase
+              .from('reviews')
+              .upsert(rows, { onConflict: 'site_id,source,external_id', ignoreDuplicates: true })
+          }
         }
+      } catch (err) {
+        console.error(`Google review check failed for site ${site.domain}:`, err)
       }
-    } catch (err) {
-      console.error(`Google review check failed for site ${site.domain}:`, err)
     }
   }
 
   // ── Trustpilot ──
   if (site.trustpilot_domain) {
+    const trustpilotApiKey = integrationMap['trustpilot']?.api_key
+    if (!trustpilotApiKey) {
+      console.warn(`Trustpilot API key not configured — skipping Trustpilot check for ${site.domain}`)
+    } else {
     try {
       const details = await getBusinessUnitDetails(
+        trustpilotApiKey,
         site.trustpilot_domain,
         isFullMode
       )
@@ -256,6 +276,7 @@ export async function runReviewCheckForSite(
       }
     } catch (err) {
       console.error(`Trustpilot review check failed for site ${site.domain}:`, err)
+    }
     }
   }
 
