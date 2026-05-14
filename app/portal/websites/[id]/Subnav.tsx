@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Activity,
+  CreditCard,
   Gauge,
   LayoutDashboard,
   SearchCheck,
@@ -23,10 +24,11 @@ interface Props {
   hasMonitor:       boolean
   hasPageSpeed:     boolean
   hasBrokenLinks:   boolean
+  hasStripe:        boolean
 }
 
 export default function Subnav({
-  siteId, hasSeo, hasMonitor, hasPageSpeed, hasBrokenLinks,
+  siteId, hasSeo, hasMonitor, hasPageSpeed, hasBrokenLinks, hasStripe,
 }: Props) {
   const pathname = usePathname()
   const base     = `/portal/websites/${siteId}`
@@ -44,6 +46,9 @@ export default function Subnav({
       : []),
     ...(hasMonitor
       ? [{ href: `${base}/monitoring`,   label: 'Monitoring',         icon: Activity    } as NavItem]
+      : []),
+    ...(hasStripe
+      ? [{ href: '/portal/billing',      label: 'Billing',            icon: CreditCard  } as NavItem]
       : []),
   ]
 

@@ -29,7 +29,7 @@ export default async function AdminWebsiteLayout({ children, params }: LayoutPro
   const [{ data: profile }, { data: userData }] = await Promise.all([
     admin
       .from('profiles')
-      .select('full_name, company_name')
+      .select('full_name, company_name, stripe_customer_id')
       .eq('id', customerId)
       .maybeSingle(),
     admin.auth.admin.getUserById(customerId),
@@ -41,6 +41,7 @@ export default async function AdminWebsiteLayout({ children, params }: LayoutPro
     profile?.company_name?.trim() ||
     customerEmail ||
     'Customer'
+  const hasStripe = !!profile?.stripe_customer_id
 
   return (
     <div data-fullbleed className="flex min-h-full">
@@ -51,6 +52,7 @@ export default async function AdminWebsiteLayout({ children, params }: LayoutPro
         hasMonitor={hasMonitor}
         hasPageSpeed={hasPageSpeed}
         hasBrokenLinks={hasBrokenLinks}
+        hasStripe={hasStripe}
       />
 
       <div className="min-w-0 flex-1 px-6 py-10 md:px-8 md:py-12">
