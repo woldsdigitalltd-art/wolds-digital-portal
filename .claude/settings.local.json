@@ -18,7 +18,14 @@
       "Bash(PATH=/opt/homebrew/bin:__TRACKED_VAR__ npm install stripe)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(PATH=/opt/homebrew/bin:__TRACKED_VAR__ git push origin main)"
+      "Bash(PATH=/opt/homebrew/bin:__TRACKED_VAR__ git push origin main)",
+      "Bash(npm install *)",
+      "mcp__claude_ai_Supabase__list_projects",
+      "mcp__claude_ai_Supabase__apply_migration",
+      "Bash(git push *)",
+      "mcp__claude_ai_Vercel__deploy_to_vercel",
+      "mcp__claude_ai_Vercel__list_deployments",
+      "Bash(npx vercel *)"
     ]
   }
 }

@@ -52,7 +52,7 @@ export default function Subnav({
       : []),
     { href: `${base}/services`,   label: 'Services',          icon: Boxes },
     ...(hasStripe
-      ? [{ href: '/admin/billing',       label: 'Billing',           icon: CreditCard  } as NavItem]
+      ? [{ href: `${base}/billing`,      label: 'Billing',           icon: CreditCard  } as NavItem]
       : []),
   ]
 
