@@ -25,7 +25,19 @@
       "Bash(git push *)",
       "mcp__claude_ai_Vercel__deploy_to_vercel",
       "mcp__claude_ai_Vercel__list_deployments",
-      "Bash(npx vercel *)"
+      "Bash(npx vercel *)",
+      "mcp__claude_ai_Supabase__list_migrations",
+      "mcp__claude_ai_Supabase__execute_sql",
+      "mcp__claude_ai_Vercel__list_projects",
+      "mcp__claude_ai_Vercel__list_teams",
+      "Bash(mkdir -p \"/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/app/api/incidents/[id]/comments\")",
+      "Bash(mkdir -p \"/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/app/portal/incidents/[id]\")",
+      "Bash(mkdir -p \"/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/app/admin/incidents/[id]\")"
+    ],
+    "additionalDirectories": [
+      "/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/app/api/incidents/[id]",
+      "/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/app/portal/incidents",
+      "/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/app/admin/incidents"
     ]
   }
 }

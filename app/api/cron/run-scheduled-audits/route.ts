@@ -3,6 +3,9 @@ import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import { isAuditIntegrationKey, runAuditForKey } from '@/lib/integrations/audits'
 import { computeNextRun } from '@/lib/integrations/schedule'
 import type { ScheduleFrequency } from '@/lib/integrations/types'
+import { evaluateSeoRules } from '@/lib/incidents/rules/seo'
+import { evaluateBrokenLinksRules } from '@/lib/incidents/rules/broken-links'
+import { evaluatePageSpeedRules } from '@/lib/incidents/rules/page-speed'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -102,6 +105,15 @@ export async function GET(request: Request) {
           schedule_next_run_at: nextRun?.toISOString() ?? null,
         })
         .eq('id', row.id)
+
+      // Evaluate incident rules after persisting the result.
+      try {
+        if (audit.key === 'seoscoreapi') await evaluateSeoRules(row.site_id, audit.result)
+        if (audit.key === 'brokenlinks') await evaluateBrokenLinksRules(row.site_id, audit.result)
+        if (audit.key === 'pagespeed')   await evaluatePageSpeedRules(row.site_id, audit.result)
+      } catch (ruleErr) {
+        console.error(`[cron/scheduled-audits] incident rules failed for ${row.id}:`, ruleErr)
+      }
 
       results.push({ id: row.id, ok: true })
     } catch (err) {

@@ -9,12 +9,14 @@ import {
   Globe,
   User,
   Bell,
+  ShieldAlert,
   LogOut,
 } from 'lucide-react'
 
 const navItems = [
   { href: '/portal',               label: 'Dashboard',     icon: LayoutDashboard, exact: true },
   { href: '/portal/websites',      label: 'Websites',      icon: Globe },
+  { href: '/portal/incidents',     label: 'Incidents',     icon: ShieldAlert },
   { href: '/portal/account',       label: 'Account',       icon: User },
   { href: '/portal/notifications', label: 'Notifications', icon: Bell },
 ]
