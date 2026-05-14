@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, ExternalLink, Globe } from 'lucide-react'
+import { createClient } from '@/lib/supabase/server'
 import Subnav from './Subnav'
 import { hasIntegration, loadOwnedSite } from './site-loader'
 
@@ -11,7 +12,7 @@ interface LayoutProps {
 
 export default async function WebsiteLayout({ children, params }: LayoutProps) {
   const { id } = await params
-  const site   = await loadOwnedSite(id)
+  const [site, supabase] = await Promise.all([loadOwnedSite(id), createClient()])
   if (!site) notFound()
 
   const hasSeo         = hasIntegration(site, 'seoscoreapi')
@@ -19,6 +20,12 @@ export default async function WebsiteLayout({ children, params }: LayoutProps) {
   const hasPageSpeed   = hasIntegration(site, 'pagespeed')
   const hasBrokenLinks = hasIntegration(site, 'brokenlinks')
   const display        = site.display_name?.trim() || site.domain
+
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profile } = user
+    ? await supabase.from('profiles').select('stripe_customer_id').eq('id', user.id).maybeSingle()
+    : { data: null }
+  const hasStripe = !!profile?.stripe_customer_id
 
   return (
     <div data-fullbleed className="flex min-h-full">
@@ -28,6 +35,7 @@ export default async function WebsiteLayout({ children, params }: LayoutProps) {
         hasMonitor={hasMonitor}
         hasPageSpeed={hasPageSpeed}
         hasBrokenLinks={hasBrokenLinks}
+        hasStripe={hasStripe}
       />
 
       <div className="min-w-0 flex-1 px-6 py-10 md:px-8 md:py-12">

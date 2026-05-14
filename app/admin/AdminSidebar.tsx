@@ -11,13 +11,11 @@ import {
   User,
   LogOut,
   ShieldCheck,
-  CreditCard,
 } from 'lucide-react'
 
 const navItems = [
   { href: '/admin',              label: 'Overview',     icon: LayoutDashboard, exact: true },
   { href: '/admin/customers',    label: 'Customers',    icon: Users },
-  { href: '/admin/billing',      label: 'Billing',      icon: CreditCard },
   { href: '/admin/integrations', label: 'Integrations', icon: Boxes },
   { href: '/admin/account',      label: 'My Account',   icon: User },
 ]

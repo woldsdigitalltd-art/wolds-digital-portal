@@ -1,5 +1,6 @@
 import 'server-only'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 import {
   createStripeCustomer,
   createOneOffInvoice,
@@ -70,10 +71,15 @@ export async function provisionStripeCustomer(ownerId: string): Promise<void> {
     ownerId: profile.id,
   })
 
-  await supabase
+  // Use service role to bypass RLS and column-level grants — stripe_customer_id
+  // is not writable by the `authenticated` role.
+  const serviceRole = createServiceRoleClient()
+  const { error: updateError } = await serviceRole
     .from('profiles')
     .update({ stripe_customer_id: stripeCustomer.id })
     .eq('id', ownerId)
+
+  if (updateError) throw new Error(`Failed to save stripe_customer_id: ${updateError.message}`)
 }
 
 // ─── Sites ────────────────────────────────────────────────────────────────────
