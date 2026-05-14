@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Users, CreditCard, Clock } from 'lucide-react'
 import NewCustomerButton from './NewCustomerButton'
 import ManageSitesButton from './ManageSitesButton'
+import ProvisionStripeButton from './ProvisionStripeButton'
 
 interface AdminCustomer {
   id:                     string
@@ -11,6 +12,7 @@ interface AdminCustomer {
   full_name:              string | null
   company_name:           string | null
   phone:                  string | null
+  stripe_customer_id:     string | null
   site_count:             number
   plan:                   string | null
   subscription_status:    string | null
@@ -65,6 +67,7 @@ export default async function AdminCustomersPage() {
                   <Th>Company</Th>
                   <Th>Plan</Th>
                   <Th className="text-center">Sites</Th>
+                  <Th>Stripe</Th>
                   <Th>Last sign in</Th>
                   <Th>Joined</Th>
                 </tr>
@@ -144,6 +147,12 @@ function CustomerRow({ customer }: { customer: AdminCustomer }) {
           customerEmail={customer.email}
           customerName={customer.full_name}
           initialCount={customer.site_count}
+        />
+      </td>
+      <td className="px-4 py-3">
+        <ProvisionStripeButton
+          customerId={customer.id}
+          hasStripe={!!customer.stripe_customer_id}
         />
       </td>
       <td className="px-4 py-3 text-xs text-navy-600">
