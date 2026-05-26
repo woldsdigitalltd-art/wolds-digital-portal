@@ -12,52 +12,25 @@ import type {
 } from '@/lib/integrations/broken-links'
 
 /**
- * Geekflare API client (api.geekflare.com).
+ * Audit clients for the two Geekflare-backed integrations.
  *
- * One API key (stored on each integration's `input_values.api_key`)
- * covers both the Lighthouse-backed Page Speed audit and the broken
- * link scanner. Each provisioned site_integration stores the most
- * recent audit JSON on `provider_metadata`.
+ * ── Page Speed ──────────────────────────────────────────────────────────────
+ * The Geekflare Lighthouse endpoint migrated to returning an HTML report URL
+ * rather than structured JSON. We now use the Google PageSpeed Insights API
+ * (v5) instead — it runs the same Lighthouse engine, returns clean JSON,
+ * and is free without an API key. The Geekflare API key stored on the
+ * integration is accepted but silently ignored (it keeps the DB row valid
+ * so no migration of existing site_integrations is needed).
+ *
+ * ── Broken Links ────────────────────────────────────────────────────────────
+ * The Geekflare broken-link API response moved from
+ *   { result: [{ link, statusCode, error, foundOn }] }
+ * to
+ *   { data: [{ link, status }] }
+ * Both shapes are handled so any cached re-runs don't error.
  */
 
-const API = 'https://api.geekflare.com'
-
-interface Json {
-  [key: string]: unknown
-}
-
-async function request(
-  apiKey:   string,
-  endpoint: string,
-  body:     Record<string, unknown>,
-): Promise<Json> {
-  if (!apiKey) throw new Error('Geekflare API key is missing.')
-
-  const res = await fetch(`${API}/${endpoint}`, {
-    method:  'POST',
-    headers: {
-      'x-api-key':    apiKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  })
-
-  let json: Json
-  try {
-    json = (await res.json()) as Json
-  } catch {
-    json = {}
-  }
-
-  if (!res.ok) {
-    throw new Error(
-      `Geekflare ${endpoint} [${res.status}]: ${JSON.stringify(json)}`,
-    )
-  }
-  return json
-}
-
-/* ─────────────────────────────── Page Speed ──────────────────────────── */
+/* ─────────────────────────────── Page Speed ──────────────────────────────── */
 
 interface LighthouseAudit {
   id?:           string
@@ -74,20 +47,51 @@ interface LighthouseResult {
 }
 
 /**
- * Run a Lighthouse audit against `url` (desktop strategy) and reshape
- * the result down to what the UI actually renders. We deliberately
- * throw away most of the verbose Lighthouse payload — the audit is
- * stored in Postgres and we don't want a 1MB+ JSON blob per site.
+ * Run a Lighthouse audit via Google PageSpeed Insights (v5).
+ *
+ * The `apiKey` parameter is accepted for interface compatibility with the
+ * existing Geekflare integration row but is **not used** — Google PSI works
+ * without a key for normal audit volumes. If you ever want to supply a Google
+ * API key you can pass it here; non-Geekflare keys (i.e. not prefixed `gf_`)
+ * are forwarded as the `key` query parameter.
  */
 export async function runPageSpeedAudit(
   apiKey: string,
   url:    string,
 ): Promise<PageSpeedResult> {
-  const data   = await request(apiKey, 'lighthouse', { url, type: 'desktop' })
-  const result = (data.result as LighthouseResult | undefined) ?? {}
+  const endpoint = new URL(
+    'https://www.googleapis.com/pagespeedonline/v5/runPagespeed',
+  )
+  endpoint.searchParams.set('url',      url)
+  endpoint.searchParams.set('strategy', 'desktop')
 
-  const cats = result.categories ?? {}
-  const audits = result.audits   ?? {}
+  for (const cat of ['performance', 'accessibility', 'best-practices', 'seo']) {
+    endpoint.searchParams.append('category', cat)
+  }
+
+  // Only forward as a Google API key if it doesn't look like a Geekflare key.
+  if (apiKey && !apiKey.startsWith('gf_')) {
+    endpoint.searchParams.set('key', apiKey)
+  }
+
+  const res = await fetch(endpoint.toString())
+
+  let json: Record<string, unknown>
+  try {
+    json = (await res.json()) as Record<string, unknown>
+  } catch {
+    json = {}
+  }
+
+  if (!res.ok) {
+    throw new Error(
+      `Google PageSpeed Insights [${res.status}]: ${JSON.stringify(json)}`,
+    )
+  }
+
+  const lhr    = (json.lighthouseResult as LighthouseResult | undefined) ?? {}
+  const cats   = lhr.categories ?? {}
+  const audits = lhr.audits     ?? {}
 
   return {
     url,
@@ -148,10 +152,55 @@ function collectOpportunities(
     }))
 }
 
-/* ─────────────────────────────── Broken Links ────────────────────────── */
+/* ─────────────────────────────── Broken Links ────────────────────────────── */
 
+const GEEKFLARE_API = 'https://api.geekflare.com'
+
+interface Json {
+  [key: string]: unknown
+}
+
+async function geekflareRequest(
+  apiKey:   string,
+  endpoint: string,
+  body:     Record<string, unknown>,
+): Promise<Json> {
+  if (!apiKey) throw new Error('Geekflare API key is missing.')
+
+  const res = await fetch(`${GEEKFLARE_API}/${endpoint}`, {
+    method:  'POST',
+    headers: {
+      'x-api-key':    apiKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+
+  let json: Json
+  try {
+    json = (await res.json()) as Json
+  } catch {
+    json = {}
+  }
+
+  if (!res.ok) {
+    throw new Error(
+      `Geekflare ${endpoint} [${res.status}]: ${JSON.stringify(json)}`,
+    )
+  }
+  return json
+}
+
+/**
+ * Geekflare link row — supports both old shape ({ statusCode, foundOn })
+ * and the current shape ({ status }) so the client handles any lingering
+ * cached responses gracefully.
+ */
 interface GeekflareLinkRow {
   link?:       string
+  /** Current Geekflare API field name. */
+  status?:     number
+  /** Legacy field name kept for backward compat. */
   statusCode?: number
   error?:      string
   foundOn?:    string
@@ -166,23 +215,31 @@ export async function runBrokenLinksAudit(
   apiKey: string,
   url:    string,
 ): Promise<BrokenLinksResult> {
-  const data = await request(apiKey, 'brokenlink', { url })
-  const rows = Array.isArray(data.result) ? (data.result as GeekflareLinkRow[]) : []
+  const data = await geekflareRequest(apiKey, 'brokenlink', { url })
 
-  const broken  = rows.filter(l => isBroken(l.statusCode))
-  const warning = rows.filter(l => isWarning(l.statusCode))
+  // Current API (≥ 2025): rows live under `data`
+  // Legacy API:           rows lived under `result`
+  const rows: GeekflareLinkRow[] =
+    Array.isArray(data.data)   ? (data.data   as GeekflareLinkRow[]) :
+    Array.isArray(data.result) ? (data.result as GeekflareLinkRow[]) : []
+
+  const broken  = rows.filter(l => isBroken(l.status  ?? l.statusCode))
+  const warning = rows.filter(l => isWarning(l.status ?? l.statusCode))
 
   return {
     url,
     total_links: rows.length,
     broken:      broken.length,
     warnings:    warning.length,
-    broken_links: broken.slice(0, 50).map<BrokenLink>(l => ({
-      link:        l.link       ?? '',
-      status_code: typeof l.statusCode === 'number' ? l.statusCode : 0,
-      error:       l.error      ?? `HTTP ${l.statusCode ?? '???'}`,
-      found_on:    l.foundOn    ?? url,
-    })),
+    broken_links: broken.slice(0, 50).map<BrokenLink>(l => {
+      const code = l.status ?? l.statusCode
+      return {
+        link:        l.link    ?? '',
+        status_code: typeof code === 'number' ? code : 0,
+        error:       l.error   ?? `HTTP ${code ?? '???'}`,
+        found_on:    l.foundOn ?? url,
+      }
+    }),
     audited_at: new Date().toISOString(),
   }
 }
