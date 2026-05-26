@@ -69,10 +69,9 @@ export async function runPageSpeedAudit(
     endpoint.searchParams.append('category', cat)
   }
 
-  // Only forward as a Google API key if it doesn't look like a Geekflare key.
-  if (apiKey && !apiKey.startsWith('gf_')) {
-    endpoint.searchParams.set('key', apiKey)
-  }
+  // No API key — Google PSI works without one at normal audit volumes.
+  // Forwarding an unrelated stored key (e.g. a different Google project's
+  // key with PSI disabled) causes a 403, so we always call unauthenticated.
 
   const res = await fetch(endpoint.toString())
 
