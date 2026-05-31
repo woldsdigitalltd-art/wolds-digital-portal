@@ -32,7 +32,22 @@
       "mcp__claude_ai_Vercel__list_teams",
       "Bash(mkdir -p \"/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/app/api/incidents/[id]/comments\")",
       "Bash(mkdir -p \"/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/app/portal/incidents/[id]\")",
-      "Bash(mkdir -p \"/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/app/admin/incidents/[id]\")"
+      "Bash(mkdir -p \"/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/app/admin/incidents/[id]\")",
+      "Bash(git status *)",
+      "Bash(git fetch *)",
+      "WebFetch(domain:geekflare.com)",
+      "WebFetch(domain:api.geekflare.com)",
+      "WebFetch(domain:docs.geekflare.com)",
+      "WebFetch(domain:www.googleapis.com)",
+      "WebFetch(domain:developers.google.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(git commit -m 'fix\\(pagespeed\\): switch to Google PSI API, fix broken-links field paths *)",
+      "Bash(git commit -m 'fix\\(pagespeed\\): never forward stored API key to Google PSI *)",
+      "Bash(rm '/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/lib/integrations/page-speed.ts' '/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/lib/incidents/rules/page-speed.ts' '/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/app/portal/websites/[id]/performance/PerformanceView.tsx')",
+      "Bash(rm '/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/app/portal/websites/[id]/performance/page.tsx' '/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/app/admin/customers/[id]/sites/[siteId]/performance/page.tsx')",
+      "Bash(rmdir \"/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/app/portal/websites/[id]/performance\")",
+      "Bash(rmdir \"/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/app/admin/customers/[id]/sites/[siteId]/performance\")",
+      "Bash(git commit -m 'feat: remove Page Speed integration entirely *)"
     ],
     "additionalDirectories": [
       "/Users/eliothickie/Desktop/Wolds Digital/wolds-portal/app/api/incidents/[id]",

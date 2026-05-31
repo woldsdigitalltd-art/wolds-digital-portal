@@ -11,13 +11,6 @@ import {
   scoreColour,
   type SeoAuditResult,
 } from '@/lib/integrations/seo-audit'
-import {
-  formatVital,
-  lighthouseColour,
-  SCORE_CATEGORIES,
-  vitalColour,
-  type PageSpeedResult,
-} from '@/lib/integrations/page-speed'
 import type { BrokenLinksResult } from '@/lib/integrations/broken-links'
 
 /**
@@ -113,88 +106,6 @@ export function SeoAuditPanel({ audit }: { audit: SeoAuditResult }) {
           ))}
         </div>
       </div>
-    </div>
-  )
-}
-
-/* ─────────────────────────────── Page Speed ─────────────────────────── */
-
-export function PageSpeedPanel({ report }: { report: PageSpeedResult }) {
-  return (
-    <div className="mt-3 rounded-xl border border-navy-100 bg-navy-50/40 p-3">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-navy-500">
-        Page Speed
-      </p>
-      <p className="mt-0.5 truncate text-xs font-semibold text-navy-900">{report.url}</p>
-      <p className="mt-0.5 text-[10px] text-navy-400">
-        Audited {fmtDate(report.audited_at)}
-      </p>
-
-      <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-        {SCORE_CATEGORIES.map(({ key, label }) => {
-          const score  = report.scores[key]
-          const colour = lighthouseColour(score)
-          return (
-            <div key={key} className="rounded-lg border border-navy-100 bg-white px-2 py-2 text-center">
-              <div className={`mx-auto flex h-10 w-10 items-center justify-center rounded-full ${colour.bg} ring-1 ${colour.ring}`}>
-                <span className={`text-sm font-bold leading-none ${colour.text}`}>{score}</span>
-              </div>
-              <p className="mt-1.5 text-[10px] font-semibold text-navy-700">{label}</p>
-            </div>
-          )
-        })}
-      </div>
-
-      <div className="mt-3">
-        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-navy-500">
-          Core Web Vitals
-        </p>
-        <div className="grid grid-cols-3 gap-1.5">
-          <VitalCell label="LCP" vital={report.core_web_vitals.lcp} />
-          <VitalCell label="CLS" vital={report.core_web_vitals.cls} />
-          <VitalCell label="TBT" vital={report.core_web_vitals.fid} />
-        </div>
-      </div>
-
-      {report.opportunities.length > 0 && (
-        <div className="mt-3">
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-navy-500">
-            Top opportunities
-          </p>
-          <ul className="space-y-1.5">
-            {report.opportunities.slice(0, 5).map(op => (
-              <li key={op.id} className="rounded-lg border border-navy-100 bg-white px-2.5 py-1.5">
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="truncate text-[11px] font-semibold text-navy-900">{op.title}</p>
-                  {op.savings_ms !== undefined && op.savings_ms > 0 && (
-                    <span className="shrink-0 rounded-full bg-brand-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-brand-700 ring-1 ring-brand-100">
-                      Save {Math.round(op.savings_ms)}ms
-                    </span>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function VitalCell({
-  label, vital,
-}: {
-  label: string
-  vital: PageSpeedResult['core_web_vitals']['lcp']
-}) {
-  const colour = vitalColour(vital.status)
-  return (
-    <div className="rounded-lg border border-navy-100 bg-white px-2 py-1.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-navy-500">{label}</p>
-      <p className="mt-0.5 text-sm font-bold text-navy-900">{formatVital(vital)}</p>
-      <span className={`mt-0.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${colour.bg} ${colour.text} ring-1 ${colour.ring}`}>
-        {colour.label}
-      </span>
     </div>
   )
 }

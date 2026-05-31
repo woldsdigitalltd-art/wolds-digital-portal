@@ -5,7 +5,6 @@ import { computeNextRun } from '@/lib/integrations/schedule'
 import type { ScheduleFrequency } from '@/lib/integrations/types'
 import { evaluateSeoRules } from '@/lib/incidents/rules/seo'
 import { evaluateBrokenLinksRules } from '@/lib/incidents/rules/broken-links'
-import { evaluatePageSpeedRules } from '@/lib/incidents/rules/page-speed'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -110,7 +109,6 @@ export async function GET(request: Request) {
       try {
         if (audit.key === 'seoscoreapi') await evaluateSeoRules(row.site_id, audit.result)
         if (audit.key === 'brokenlinks') await evaluateBrokenLinksRules(row.site_id, audit.result)
-        if (audit.key === 'pagespeed')   await evaluatePageSpeedRules(row.site_id, audit.result)
       } catch (ruleErr) {
         console.error(`[cron/scheduled-audits] incident rules failed for ${row.id}:`, ruleErr)
       }

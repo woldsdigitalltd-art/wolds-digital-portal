@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation'
 import {
   Activity,
   CreditCard,
-  Gauge,
   LayoutDashboard,
   SearchCheck,
   Star,
@@ -23,14 +22,13 @@ interface Props {
   siteId:              string
   hasSeo:              boolean
   hasMonitor:          boolean
-  hasPageSpeed:        boolean
   hasBrokenLinks:      boolean
   hasStripe:           boolean
   hasReviewMonitor:    boolean
 }
 
 export default function Subnav({
-  siteId, hasSeo, hasMonitor, hasPageSpeed, hasBrokenLinks, hasStripe, hasReviewMonitor,
+  siteId, hasSeo, hasMonitor, hasBrokenLinks, hasStripe, hasReviewMonitor,
 }: Props) {
   const pathname = usePathname()
   const base     = `/portal/websites/${siteId}`
@@ -39,9 +37,6 @@ export default function Subnav({
     { href: base,                 label: 'Dashboard',          icon: LayoutDashboard, exact: true },
     ...(hasSeo
       ? [{ href: `${base}/seo`,          label: 'SEO',                icon: SearchCheck } as NavItem]
-      : []),
-    ...(hasPageSpeed
-      ? [{ href: `${base}/performance`,  label: 'Performance',        icon: Gauge       } as NavItem]
       : []),
     ...(hasBrokenLinks
       ? [{ href: `${base}/broken-links`, label: 'Broken Link Checker', icon: Unlink      } as NavItem]

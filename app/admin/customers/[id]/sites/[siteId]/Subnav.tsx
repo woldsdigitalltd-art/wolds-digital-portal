@@ -6,7 +6,6 @@ import {
   Activity,
   Boxes,
   CreditCard,
-  Gauge,
   LayoutDashboard,
   SearchCheck,
   Star,
@@ -25,7 +24,6 @@ interface Props {
   siteId:           string
   hasSeo:           boolean
   hasMonitor:       boolean
-  hasPageSpeed:     boolean
   hasBrokenLinks:   boolean
   hasStripe:        boolean
   hasReviewMonitor: boolean
@@ -33,7 +31,7 @@ interface Props {
 
 export default function Subnav({
   customerId, siteId,
-  hasSeo, hasMonitor, hasPageSpeed, hasBrokenLinks, hasStripe, hasReviewMonitor,
+  hasSeo, hasMonitor, hasBrokenLinks, hasStripe, hasReviewMonitor,
 }: Props) {
   const pathname = usePathname()
   const base     = `/admin/customers/${customerId}/sites/${siteId}`
@@ -42,9 +40,6 @@ export default function Subnav({
     { href: base,                 label: 'Dashboard',         icon: LayoutDashboard, exact: true },
     ...(hasSeo
       ? [{ href: `${base}/seo`,          label: 'SEO',               icon: SearchCheck } as NavItem]
-      : []),
-    ...(hasPageSpeed
-      ? [{ href: `${base}/performance`,  label: 'Performance',       icon: Gauge       } as NavItem]
       : []),
     ...(hasBrokenLinks
       ? [{ href: `${base}/broken-links`, label: 'Broken Link Checker', icon: Unlink     } as NavItem]

@@ -23,7 +23,7 @@ export interface AuditScheduleInfo {
  */
 export async function loadAuditSchedule(
   siteId: string,
-  key:    'seoscoreapi' | 'pagespeed' | 'brokenlinks',
+  key:    'seoscoreapi' | 'brokenlinks',
 ): Promise<AuditScheduleInfo | null> {
   const sr = createServiceRoleClient()
   const { data, error } = await sr

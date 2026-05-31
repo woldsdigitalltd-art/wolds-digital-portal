@@ -5,34 +5,30 @@ import {
   CheckCircle,
   CheckCircle2,
   Clock,
-  Gauge,
   SearchCheck,
   Unlink,
   XCircle,
 } from 'lucide-react'
 import type { LiveUptime } from '@/lib/integrations/uptime'
 import { scoreColour, type SeoAuditResult } from '@/lib/integrations/seo-audit'
-import { lighthouseColour, type PageSpeedResult } from '@/lib/integrations/page-speed'
 import type { BrokenLinksResult } from '@/lib/integrations/broken-links'
 
 interface DashboardViewProps {
   basePath:       string
   hasSeo:         boolean
   hasMonitor:     boolean
-  hasPageSpeed:   boolean
   hasBrokenLinks: boolean
   uptime:         LiveUptime        | null
   audit:          SeoAuditResult    | null
-  pageSpeed:      PageSpeedResult   | null
   brokenLinks:    BrokenLinksResult | null
 }
 
 export function DashboardView({
   basePath,
-  hasSeo, hasMonitor, hasPageSpeed, hasBrokenLinks,
-  uptime, audit, pageSpeed, brokenLinks,
+  hasSeo, hasMonitor, hasBrokenLinks,
+  uptime, audit, brokenLinks,
 }: DashboardViewProps) {
-  const anyIntegration = hasSeo || hasMonitor || hasPageSpeed || hasBrokenLinks
+  const anyIntegration = hasSeo || hasMonitor || hasBrokenLinks
 
   return (
     <div>
@@ -50,10 +46,9 @@ export function DashboardView({
         <EmptyState />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {hasMonitor      && <MonitoringCard   basePath={basePath} uptime={uptime}       />}
-          {hasSeo          && <SeoCard          basePath={basePath} audit={audit}         />}
-          {hasPageSpeed    && <PageSpeedCard    basePath={basePath} report={pageSpeed}    />}
-          {hasBrokenLinks  && <BrokenLinksCard  basePath={basePath} report={brokenLinks}  />}
+          {hasMonitor     && <MonitoringCard  basePath={basePath} uptime={uptime}      />}
+          {hasSeo         && <SeoCard         basePath={basePath} audit={audit}        />}
+          {hasBrokenLinks && <BrokenLinksCard basePath={basePath} report={brokenLinks} />}
         </div>
       )}
     </div>
@@ -164,64 +159,6 @@ function SeoCard({
   )
 }
 
-function PageSpeedCard({
-  basePath, report,
-}: {
-  basePath: string
-  report:   PageSpeedResult | null
-}) {
-  if (!report) {
-    return (
-      <CardShell
-        href={`${basePath}/performance`}
-        eyebrow="Performance"
-        title="Audit pending"
-        titleClass="text-navy-700"
-      >
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-navy-50 text-navy-500 ring-1 ring-navy-100">
-          <Gauge className="h-6 w-6" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs text-navy-500">
-            We&apos;re preparing your first Lighthouse audit.
-          </p>
-        </div>
-      </CardShell>
-    )
-  }
-
-  const perf   = report.scores.performance
-  const colour = lighthouseColour(perf)
-
-  return (
-    <CardShell
-      href={`${basePath}/performance`}
-      eyebrow="Performance"
-      title={`Lighthouse ${perf}/100`}
-      titleClass={colour.text}
-    >
-      <div className={`flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl ${colour.bg} ring-1 ${colour.ring}`}>
-        <span className={`text-base font-bold leading-none ${colour.text}`}>{perf}</span>
-        <span className={`mt-0.5 text-[9px] font-semibold uppercase tracking-wider ${colour.text}`}>
-          /100
-        </span>
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-xs text-navy-600">
-          {report.opportunities.length > 0
-            ? `${report.opportunities.length} opportunit${report.opportunities.length === 1 ? 'y' : 'ies'} to speed things up`
-            : 'No major speed wins flagged.'}
-        </p>
-        <p className="mt-0.5 text-[11px] text-navy-400">
-          Audited {new Date(report.audited_at).toLocaleString('en-GB', {
-            day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-          })}
-        </p>
-      </div>
-    </CardShell>
-  )
-}
-
 function BrokenLinksCard({
   basePath, report,
 }: {
@@ -312,9 +249,8 @@ function EmptyState() {
     <div className="rounded-2xl border border-dashed border-navy-200 bg-white/60 p-10 text-center backdrop-blur-sm">
       <p className="text-sm font-semibold text-navy-900">No integrations active yet</p>
       <p className="mt-1 text-sm text-navy-600">
-        Once we&apos;ve enabled SEO audits, performance checks, link
-        scans, or uptime monitoring for this site, you&apos;ll see
-        them here.{' '}
+        Once we&apos;ve enabled SEO audits, link scans, or uptime monitoring
+        for this site, you&apos;ll see them here.{' '}
         <a
           href="mailto:hello@woldsdigital.co.uk?subject=Enable%20integrations"
           className="font-semibold text-brand-700 underline-offset-2 hover:underline"

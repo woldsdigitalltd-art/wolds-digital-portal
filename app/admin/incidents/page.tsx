@@ -51,7 +51,6 @@ export default async function AdminIncidentsPage({
     { label: 'All integrations', value: null            },
     { label: 'SEO',              value: 'seo'           },
     { label: 'Broken Links',     value: 'broken-links'  },
-    { label: 'Page Speed',       value: 'page-speed'    },
     { label: 'Uptime',           value: 'uptime'        },
   ]
 

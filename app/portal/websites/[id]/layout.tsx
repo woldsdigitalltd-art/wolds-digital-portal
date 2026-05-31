@@ -17,7 +17,6 @@ export default async function WebsiteLayout({ children, params }: LayoutProps) {
 
   const hasSeo           = hasIntegration(site, 'seoscoreapi')
   const hasMonitor       = hasIntegration(site, 'betterstack')
-  const hasPageSpeed     = hasIntegration(site, 'pagespeed')
   const hasBrokenLinks   = hasIntegration(site, 'brokenlinks')
   const hasReviewMonitor = hasIntegration(site, 'google_places') || hasIntegration(site, 'trustpilot')
   const display        = site.display_name?.trim() || site.domain
@@ -34,7 +33,6 @@ export default async function WebsiteLayout({ children, params }: LayoutProps) {
         siteId={site.id}
         hasSeo={hasSeo}
         hasMonitor={hasMonitor}
-        hasPageSpeed={hasPageSpeed}
         hasBrokenLinks={hasBrokenLinks}
         hasStripe={hasStripe}
         hasReviewMonitor={hasReviewMonitor}

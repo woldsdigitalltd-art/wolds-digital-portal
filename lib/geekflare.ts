@@ -1,157 +1,18 @@
 import 'server-only'
 
 import type {
-  CoreWebVital,
-  CoreWebVitalStatus,
-  PageSpeedOpportunity,
-  PageSpeedResult,
-} from '@/lib/integrations/page-speed'
-import type {
   BrokenLink,
   BrokenLinksResult,
 } from '@/lib/integrations/broken-links'
 
 /**
- * Audit clients for the two Geekflare-backed integrations.
+ * Geekflare API client — Broken Links only.
  *
- * ── Page Speed ──────────────────────────────────────────────────────────────
- * The Geekflare Lighthouse endpoint migrated to returning an HTML report URL
- * rather than structured JSON. We now use the Google PageSpeed Insights API
- * (v5) instead — it runs the same Lighthouse engine, returns clean JSON,
- * and is free without an API key. The Geekflare API key stored on the
- * integration is accepted but silently ignored (it keeps the DB row valid
- * so no migration of existing site_integrations is needed).
- *
- * ── Broken Links ────────────────────────────────────────────────────────────
- * The Geekflare broken-link API response moved from
- *   { result: [{ link, statusCode, error, foundOn }] }
- * to
- *   { data: [{ link, status }] }
+ * The Geekflare broken-link API response shape changed in 2025:
+ *   old: { result: [{ link, statusCode, error, foundOn }] }
+ *   new: { data:   [{ link, status }] }
  * Both shapes are handled so any cached re-runs don't error.
  */
-
-/* ─────────────────────────────── Page Speed ──────────────────────────────── */
-
-interface LighthouseAudit {
-  id?:           string
-  title?:        string
-  description?:  string
-  numericValue?: number
-  score?:        number | null
-  details?:      { type?: string; overallSavingsMs?: number }
-}
-
-interface LighthouseResult {
-  categories?: Record<string, { score?: number }>
-  audits?:     Record<string, LighthouseAudit>
-}
-
-/**
- * Run a Lighthouse audit via Google PageSpeed Insights (v5).
- *
- * The `apiKey` parameter is accepted for interface compatibility with the
- * existing Geekflare integration row but is **not used** — Google PSI works
- * without a key for normal audit volumes. If you ever want to supply a Google
- * API key you can pass it here; non-Geekflare keys (i.e. not prefixed `gf_`)
- * are forwarded as the `key` query parameter.
- */
-export async function runPageSpeedAudit(
-  apiKey: string,
-  url:    string,
-): Promise<PageSpeedResult> {
-  const endpoint = new URL(
-    'https://www.googleapis.com/pagespeedonline/v5/runPagespeed',
-  )
-  endpoint.searchParams.set('url',      url)
-  endpoint.searchParams.set('strategy', 'desktop')
-
-  for (const cat of ['performance', 'accessibility', 'best-practices', 'seo']) {
-    endpoint.searchParams.append('category', cat)
-  }
-
-  // No API key — Google PSI works without one at normal audit volumes.
-  // Forwarding an unrelated stored key (e.g. a different Google project's
-  // key with PSI disabled) causes a 403, so we always call unauthenticated.
-
-  const res = await fetch(endpoint.toString())
-
-  let json: Record<string, unknown>
-  try {
-    json = (await res.json()) as Record<string, unknown>
-  } catch {
-    json = {}
-  }
-
-  if (!res.ok) {
-    throw new Error(
-      `Google PageSpeed Insights [${res.status}]: ${JSON.stringify(json)}`,
-    )
-  }
-
-  const lhr    = (json.lighthouseResult as LighthouseResult | undefined) ?? {}
-  const cats   = lhr.categories ?? {}
-  const audits = lhr.audits     ?? {}
-
-  return {
-    url,
-    scores: {
-      performance:    score100(cats.performance?.score),
-      accessibility:  score100(cats.accessibility?.score),
-      seo:            score100(cats.seo?.score),
-      best_practices: score100(cats['best-practices']?.score),
-    },
-    core_web_vitals: {
-      lcp: vitalFromAudit(audits['largest-contentful-paint'], 'ms'),
-      cls: vitalFromAudit(audits['cumulative-layout-shift'],  ''),
-      fid: vitalFromAudit(audits['total-blocking-time'],      'ms'),
-    },
-    opportunities: collectOpportunities(audits),
-    audited_at:    new Date().toISOString(),
-  }
-}
-
-function score100(score: number | null | undefined): number {
-  if (typeof score !== 'number' || !Number.isFinite(score)) return 0
-  return Math.round(score * 100)
-}
-
-function vitalStatus(score: number | null | undefined): CoreWebVitalStatus {
-  if (typeof score !== 'number') return 'fail'
-  if (score >= 0.9)              return 'pass'
-  if (score >= 0.5)              return 'needs-improvement'
-  return                              'fail'
-}
-
-function vitalFromAudit(
-  audit: LighthouseAudit | undefined,
-  unit:  string,
-): CoreWebVital {
-  return {
-    value:  typeof audit?.numericValue === 'number' ? audit.numericValue : 0,
-    unit,
-    status: vitalStatus(audit?.score ?? null),
-  }
-}
-
-function collectOpportunities(
-  audits: Record<string, LighthouseAudit>,
-): PageSpeedOpportunity[] {
-  return Object.values(audits)
-    .filter(a =>
-      a.details?.type === 'opportunity' &&
-      typeof a.score === 'number' &&
-      a.score < 1,
-    )
-    .slice(0, 5)
-    .map<PageSpeedOpportunity>(a => ({
-      id:          a.id          ?? '',
-      title:       a.title       ?? '',
-      description: a.description ?? '',
-      savings_ms:  a.details?.overallSavingsMs,
-    }))
-}
-
-/* ─────────────────────────────── Broken Links ────────────────────────────── */
 
 const GEEKFLARE_API = 'https://api.geekflare.com'
 
@@ -190,16 +51,11 @@ async function geekflareRequest(
   return json
 }
 
-/**
- * Geekflare link row — supports both old shape ({ statusCode, foundOn })
- * and the current shape ({ status }) so the client handles any lingering
- * cached responses gracefully.
- */
+/* ─────────────────────────────── Broken Links ────────────────────────────── */
+
 interface GeekflareLinkRow {
   link?:       string
-  /** Current Geekflare API field name. */
   status?:     number
-  /** Legacy field name kept for backward compat. */
   statusCode?: number
   error?:      string
   foundOn?:    string
@@ -216,8 +72,6 @@ export async function runBrokenLinksAudit(
 ): Promise<BrokenLinksResult> {
   const data = await geekflareRequest(apiKey, 'brokenlink', { url })
 
-  // Current API (≥ 2025): rows live under `data`
-  // Legacy API:           rows lived under `result`
   const rows: GeekflareLinkRow[] =
     Array.isArray(data.data)   ? (data.data   as GeekflareLinkRow[]) :
     Array.isArray(data.result) ? (data.result as GeekflareLinkRow[]) : []

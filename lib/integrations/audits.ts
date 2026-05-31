@@ -1,11 +1,10 @@
 import 'server-only'
 
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
-import { runSeoAudit }                              from '@/lib/seoscoreapi'
-import { runPageSpeedAudit, runBrokenLinksAudit }   from '@/lib/geekflare'
-import type { SeoAuditResult }       from '@/lib/integrations/seo-audit'
-import type { PageSpeedResult }      from '@/lib/integrations/page-speed'
-import type { BrokenLinksResult }    from '@/lib/integrations/broken-links'
+import { runSeoAudit }           from '@/lib/seoscoreapi'
+import { runBrokenLinksAudit }   from '@/lib/geekflare'
+import type { SeoAuditResult }   from '@/lib/integrations/seo-audit'
+import type { BrokenLinksResult } from '@/lib/integrations/broken-links'
 
 /**
  * Audit-style integrations all share the same lifecycle:
@@ -14,16 +13,10 @@ import type { BrokenLinksResult }    from '@/lib/integrations/broken-links'
  *   2. We synchronously call the provider with the site's URL.
  *   3. We persist the JSON blob to `site_integrations.provider_metadata`.
  *   4. The portal renders that cached blob until the admin re-runs.
- *
- * This module is the single source of truth for which integration
- * keys belong to that family + the runner that knows how to call
- * each provider, so `site-integrations` (provision) and `run-audit`
- * (re-run) don't drift from each other.
  */
 
 export const AUDIT_INTEGRATION_KEYS = [
   'seoscoreapi',
-  'pagespeed',
   'brokenlinks',
 ] as const
 
@@ -33,20 +26,10 @@ export function isAuditIntegrationKey(key: string): key is AuditIntegrationKey {
   return (AUDIT_INTEGRATION_KEYS as readonly string[]).includes(key)
 }
 
-/**
- * Discriminated payload returned for any audit-style integration. The
- * `key` field lets callers narrow `result` to the right shape without
- * runtime branching elsewhere.
- */
 export type AuditPayload =
-  | { key: 'seoscoreapi'; result: SeoAuditResult     }
-  | { key: 'pagespeed';   result: PageSpeedResult    }
-  | { key: 'brokenlinks'; result: BrokenLinksResult  }
+  | { key: 'seoscoreapi'; result: SeoAuditResult    }
+  | { key: 'brokenlinks'; result: BrokenLinksResult }
 
-/**
- * Dispatch to the right provider client based on `key`. Throws on
- * unsupported keys so callers can surface a clear error to the admin.
- */
 export async function runAuditForKey(
   key:    AuditIntegrationKey,
   apiKey: string,
@@ -55,8 +38,6 @@ export async function runAuditForKey(
   switch (key) {
     case 'seoscoreapi':
       return { key, result: await runSeoAudit(apiKey, url) }
-    case 'pagespeed':
-      return { key, result: await runPageSpeedAudit(apiKey, url) }
     case 'brokenlinks':
       return { key, result: await runBrokenLinksAudit(apiKey, url) }
   }
@@ -72,11 +53,6 @@ interface AuditRow {
   } | null
 }
 
-/**
- * Generic helper used by all audit fetchers. Loads every active link
- * for the given sites in one query, then narrows by integration key
- * and runtime-validates the JSON payload before handing it back.
- */
 async function loadAuditMap<T>(
   siteIds:         string[],
   expectedKey:     string,
@@ -108,30 +84,6 @@ async function loadAuditMap<T>(
     map.set(row.site_id, row.provider_metadata)
   }
   return map
-}
-
-/* ─ Page Speed ────────────────────────────────────────────────────────── */
-
-export function fetchPageSpeedBySite(
-  siteIds: string[],
-): Promise<Map<string, PageSpeedResult>> {
-  return loadAuditMap<PageSpeedResult>(
-    siteIds,
-    'pagespeed',
-    isPageSpeedPayload,
-    'fetchPageSpeedBySite',
-  )
-}
-
-function isPageSpeedPayload(value: unknown): value is PageSpeedResult {
-  if (!value || typeof value !== 'object') return false
-  const v = value as Record<string, unknown>
-  return (
-    typeof v.url === 'string' &&
-    typeof v.audited_at === 'string' &&
-    typeof v.scores === 'object' && v.scores !== null &&
-    typeof v.core_web_vitals === 'object' && v.core_web_vitals !== null
-  )
 }
 
 /* ─ Broken Links ──────────────────────────────────────────────────────── */
